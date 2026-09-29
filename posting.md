@@ -1,25 +1,23 @@
-# 🐾 Release: WebJarvis Desktop Pet (OpenPets Mini Core)
+# 🐾 Release: WebJarvis Desktop Pet v1.2.0 (OpenPets Mini Core)
 
-> **Bring your AI assistant to life right on your Linux desktop!** A lightweight, animated native PyQt6 companion for WebJarvis featuring OpenPets V2 spritesheet support, 16-sector cursor gaze tracking, and real-time Jarvis telemetry reactions.
+> **Bring your AI assistant to life right on your Linux desktop!** A high-definition, anti-aliased PyQt6 desktop companion for WebJarvis featuring OpenPets V2 spritesheets, 16-sector cursor gaze, live voice switching without restart, audio rhythm bounce, and persistent OS installation.
 
 ---
 
 ### 🌐 Social Media / Reddit / Discord Announcement
 
 ```text
-🚀 RELEASE: WebJarvis Desktop Pet — OpenPets Mini Core on Linux! 🐾✨
+🚀 MAJOR UPDATE: WebJarvis Desktop Pet v1.2.0 is out! 🐾✨
 
-Tired of static AI dashboards? Meet Yuyu Chibi — an interactive animated desktop companion walking directly on your Linux desktop (KDE Plasma / CachyOS)!
+We completely revamped our desktop companion for Linux (CachyOS / KDE Plasma):
 
-✨ Features:
-• 🖥️ True Native Desktop Overlay (PyQt6 frameless, transparent, hardware accelerated)
-• 🎮 OpenPets Codex V2 Spritesheet Engine (8x11 atlas, 192x208 frame size)
-• 👁️ Real-time 16-sector Desktop Cursor Gaze (watches your actual mouse cursor)
-• 🚶 Autonomous Desktop Roaming along the bottom edge of your screen
-• 🎙️ Right-Click Menu: Switch Jarvis TTS voice instantly between Male (Puck) and Female (Aoede)!
-• 🔄 Live Jarvis Telemetry: Reacts when Jarvis is Thinking, Speaking, Listening, or Encountering Errors
-• 💬 Dynamic Desktop Speech Bubbles with live voice responses
-• ⚡ 1-Click Toggle via the Pet Button in the Jarvis Bottom Dock & Control Center
+✨ What's New:
+• 🎨 Studio-Quality Anti-Aliasing (SmoothTransformation — crisp, silky, zero pixelation!)
+• 🖱️ Interactive Drag & Drop: Move Yuyu anywhere on your screen and Jarvis speaks directly in response!
+• 🎙️ Live Voice Switching (No Restart!): Right-click to switch between Male (Puck) and Female (Aoede) in real time
+• 🎵 Audio-RMS Rhythm Bounce: Yuyu bounces gently with Jarvis speech
+• ⚡ Jarvis Desktop Controls: Toggle microphone, interrupt speech, or launch WebJarvis directly from the pet's context menu
+• 📦 Persistent OS Installer: Installs to ~/.local/share/webjarvis_petaddon with ~/.local/bin/webjarvis-pet & KDE App Launcher integration
 
 📁 Repository: https://github.com/Graba92/webjarvis_petaddon
 #OpenPets #WebJarvis #AICompanion #PyQt6 #Linux #CachyOS #KDEPlasma #OpenSource
