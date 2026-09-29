@@ -55,7 +55,8 @@ from PyQt6.QtWidgets import (
     QApplication, QWidget, QMenu, QDialog, QVBoxLayout, QHBoxLayout,
     QLabel, QLineEdit, QPushButton, QComboBox, QSlider, QCheckBox,
     QTabWidget, QTableWidget, QTableWidgetItem, QHeaderView, QMessageBox,
-    QTimeEdit, QDateEdit, QSpinBox, QGroupBox, QProgressBar
+    QTimeEdit, QDateEdit, QSpinBox, QGroupBox, QProgressBar,
+    QSystemTrayIcon, QInputDialog
 )
 
 # OpenPets Codex V2 Spritesheet Spezifikation
@@ -433,6 +434,7 @@ class ConfigManager:
             "last_active_date": datetime.now().strftime("%Y-%m-%d")
         },
         "appointments": [],
+        "sticky_note": "",
         "pos_x": -1,
         "pos_y": -1
     }
@@ -1593,6 +1595,9 @@ class DesktopPetWindow(QWidget):
         # Initiale Positionierung am unteren Bildschirmrand
         self._initial_placement()
 
+        # System Tray Icon (KDE Plasma Taskleiste)
+        self._init_tray_icon()
+
     def _load_spritesheet(self):
         script_dir = Path(__file__).resolve().parent
         candidate_paths = [
@@ -1622,6 +1627,75 @@ class DesktopPetWindow(QWidget):
                 x = geom.right() - self.width() - 80
                 y = geom.bottom() - self.height() - 10
                 self.move(x, y)
+
+    def _init_tray_icon(self):
+        if not QSystemTrayIcon.isSystemTrayAvailable():
+            return
+
+        icon_pixmap = QPixmap(32, 32)
+        icon_pixmap.fill(Qt.GlobalColor.transparent)
+        p = QPainter(icon_pixmap)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        if self.spritesheet and not self.spritesheet.isNull():
+            crop = self.spritesheet.copy(0, 0, FRAME_WIDTH, FRAME_HEIGHT)
+            scaled = crop.scaled(32, 32, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
+            p.drawImage(0, 0, scaled)
+        else:
+            p.setBrush(QColor(0, 212, 255))
+            p.drawEllipse(2, 2, 28, 28)
+        p.end()
+
+        self.tray_icon = QSystemTrayIcon(QIcon(icon_pixmap), self)
+        self.tray_icon.setToolTip("🐾 Yuyu Desktop Pet & Tamagotchi")
+
+        tray_menu = QMenu()
+        tray_menu.setStyleSheet("""
+            QMenu { background-color: #0f172a; color: #e2e8f0; border: 1px solid #00d4ff; border-radius: 6px; padding: 4px; }
+            QMenu::item { padding: 5px 18px; border-radius: 4px; }
+            QMenu::item:selected { background-color: #00d4ff; color: #040810; font-weight: bold; }
+        """)
+
+        act_vis = tray_menu.addAction("👁️ Pet Einblenden / Verstecken")
+        act_vis.triggered.connect(self._toggle_visibility)
+
+        tray_menu.addSeparator()
+
+        tray_menu.addAction("🥪 Snack füttern").triggered.connect(lambda: self._feed_snack_action("sandwich"))
+        tray_menu.addAction("🥤 Wasser trinken").triggered.connect(lambda: self._feed_snack_action("water"))
+        tray_menu.addAction("🧘 Pause machen").triggered.connect(self._take_break_action)
+
+        tray_menu.addSeparator()
+
+        tray_menu.addAction("⚙️ Einstellungen & Dashboard...").triggered.connect(self._open_settings)
+        tray_menu.addAction("❌ Beenden").triggered.connect(self._exit_app)
+
+        self.tray_icon.setContextMenu(tray_menu)
+        self.tray_icon.activated.connect(self._on_tray_activated)
+        self.tray_icon.show()
+
+    def _toggle_visibility(self):
+        if self.isVisible():
+            self.hide()
+        else:
+            self.show()
+            self.raise_()
+
+    def _on_tray_activated(self, reason):
+        if reason == QSystemTrayIcon.ActivationReason.Trigger:
+            self._toggle_visibility()
+
+    def wheelEvent(self, event):
+        modifiers = QApplication.keyboardModifiers()
+        if modifiers == Qt.KeyboardModifier.ControlModifier:
+            delta = event.angleDelta().y()
+            step = 0.05 if delta > 0 else -0.05
+            new_scale = max(0.35, min(1.30, round(self.scale + step, 2)))
+            self._set_scale(new_scale)
+            self.speech_bubble_text = f"Größe: {int(new_scale * 100)}%"
+            self.speech_bubble_timeout = time.time() + 1.5
+            event.accept()
+        else:
+            super().wheelEvent(event)
 
     def add_particle(self, text: str, color: QColor, offset_x: float = 0.0, offset_y: float = 0.0):
         cx = self.width() // 2 + offset_x
@@ -1806,7 +1880,12 @@ class DesktopPetWindow(QWidget):
         if self.speech_bubble_text and now < self.speech_bubble_timeout and not self.tamagotchi.is_sleeping:
             self._draw_speech_bubble(painter)
 
-        # 3. Tennisball zeichnen
+        # 3. Haftnotiz (Sticky Note) zeichnen
+        note = self.config.get("sticky_note", "")
+        if note and not self.tamagotchi.is_sleeping and (not self.speech_bubble_text or now >= self.speech_bubble_timeout):
+            self._draw_sticky_note(painter, note)
+
+        # 4. Tennisball zeichnen
         if self.ball_game.active:
             painter.setPen(QPen(QColor(163, 230, 53), 1.5))
             painter.setBrush(QColor(190, 242, 100))
@@ -1959,6 +2038,41 @@ class DesktopPetWindow(QWidget):
         text_rect = QRect(bubble_x + 8, bubble_y + 6, bubble_w - 16, bubble_h - 10)
         painter.drawText(text_rect, Qt.TextFlag.TextWordWrap | Qt.AlignmentFlag.AlignCenter, text)
 
+    def _draw_sticky_note(self, painter: QPainter, note: str):
+        painter.setFont(QFont("sans-serif", 7, QFont.Weight.Bold))
+        note_text = f"📝 {note}"
+        metrics = painter.fontMetrics()
+        w = min(self.width() - 8, metrics.horizontalAdvance(note_text) + 14)
+        h = 20
+        x = (self.width() - w) // 2
+        y = self.hud_height + 6
+
+        # Gelbe Haftnotiz Optik
+        painter.setPen(QPen(QColor(234, 179, 8, 200), 1))
+        painter.setBrush(QColor(254, 240, 138, 230))
+        painter.drawRoundedRect(x, y, w, h, 4, 4)
+
+        painter.setPen(QColor(113, 63, 18))
+        rect = QRect(x + 4, y + 2, w - 8, h - 4)
+        painter.drawText(rect, Qt.AlignmentFlag.AlignCenter | Qt.TextFlag.TextSingleLine, metrics.elidedText(note_text, Qt.TextElideMode.ElideRight, w - 8))
+
+    def _edit_sticky_note(self):
+        cur_note = self.config.get("sticky_note", "")
+        text, ok = QInputDialog.getText(
+            self, "📝 Desktop Haftnotiz",
+            "Text für die Haftnotiz (leer lassen zum Löschen):",
+            text=cur_note
+        )
+        if ok:
+            self.config.set("sticky_note", text.strip())
+            if text.strip():
+                self.speech_bubble_text = "Haftnotiz angeheftet! 📝"
+                self.sfx.play("happy")
+            else:
+                self.speech_bubble_text = "Haftnotiz entfernt!"
+            self.speech_bubble_timeout = time.time() + 2.5
+            self.update()
+
     # ==========================================================================
     # MAUS & DRAG & DROP HANDLING
     # ==========================================================================
@@ -2061,6 +2175,12 @@ class DesktopPetWindow(QWidget):
         sleep_text = "⏰ Aufwecken" if self.tamagotchi.is_sleeping else "💤 Schlafen legen (Zzz... DND)"
         act_sleep = menu.addAction(sleep_text)
         act_sleep.triggered.connect(self._toggle_sleep_action)
+
+        # 5. Haftnotiz (Sticky Note)
+        cur_note = self.config.get("sticky_note", "")
+        note_text = f"📝 Haftnotiz bearbeiten ({cur_note[:12]}...)" if cur_note else "📝 Haftnotiz anheften (Memo)..."
+        act_note = menu.addAction(note_text)
+        act_note.triggered.connect(self._edit_sticky_note)
 
         menu.addSeparator()
 

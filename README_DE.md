@@ -52,6 +52,12 @@ Ein interaktiver, animierter **vollständig eigenständiger Linux Desktop Compan
   - 🌙 **Minimal Slate** (Dezentes Schiefergrau & Silber)
 - **📊 Health-Dashboard & Statistiken**:
   - Zählt getrunkene Gläser Wasser, Mahlzeiten, Pausen, Pomodoros und konsekutive Streak-Tage!
+- **📝 Desktop Haftnotiz (Quick-Memo)**:
+  - Kleiner gelber Notizzettel direkt über Yuyu anheftbar für schnelle Aufgaben, Ideen oder Einkaufszettel.
+- **🖥️ KDE Plasma System-Tray Integration**:
+  - Unauffälliges Symbol in der Taskleiste mit Live-Status im Tooltip und Schnell-Aktionen (Einblenden/Verstecken, Füttern, Pause).
+- **🔍 Stufenloses Mausrad-Zoomen (Ctrl + Scrollen)**:
+  - Halte die Strg-Taste gedrückt und scrolle mit dem Mausrad über Yuyu, um die Größe stufenlos von 35% bis 130% zu skalieren.
 - **🎨 Kristallklares Rendering & Wayland-Kompatibilität**:
   - Bilineare Kantenglättung (`SmoothTransformation`) – keine Pixel-Treppen.
   - Erzwingt `QT_QPA_PLATFORM=xcb` (XWayland), wodurch freies Drag & Drop und Roaming unter KDE Plasma Wayland perfekt funktionieren.

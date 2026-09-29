@@ -50,6 +50,12 @@ An interactive, animated **100% standalone Linux Desktop Companion** and **Tamag
   - 🌙 **Minimal Slate** (Refined Slate Gray & Silver)
 - **📊 Health Dashboard & Daily Tracker**:
   - Monitors glasses of water, meals, screen breaks, Pomodoro counts, and consecutive active streak days!
+- **📝 Desktop Sticky Note (Quick-Memo)**:
+  - Pin a small yellow sticky memo directly over Yuyu for quick reminders, ideas, or to-dos.
+- **🖥️ KDE Plasma System-Tray Integration**:
+  - Discreet tray icon in your system panel with live status tooltip and quick-actions (show/hide, feed, break).
+- **🔍 Smooth Mouse-Wheel Zooming (Ctrl + Scroll)**:
+  - Hold Ctrl and scroll over Yuyu to scale smoothly between 35% and 130%.
 - **🎨 Anti-Aliased Bilinear Rendering & Wayland Support**:
   - Smooth bilinear texture sampling (`SmoothTransformation`) without pixelation.
   - Enforces `QT_QPA_PLATFORM=xcb` (XWayland) for unrestricted `move()`, roaming and drag & drop on KDE Plasma Wayland.

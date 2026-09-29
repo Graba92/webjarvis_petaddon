@@ -23,6 +23,7 @@ We completely upgraded our Linux desktop companion into a full-fledged Tamagotch
 • 🍽️ Snack-Bar: Feed Yuyu sandwiches, apples, coffee, water, or donuts with floating emojis and chimes.
 • 🎵 Retro Sound Effects: Pure Python 16-bit PCM chimes for level-ups, feeding, and alerts.
 • 🎨 4 HUD Themes: Cyberpunk Neon, Gameboy Retro, Kawaii Pastel, and Minimal Slate.
+• 📝 Sticky Note & KDE Tray: Pin quick memos over Yuyu & control everything from the KDE Plasma system tray!
 • 📦 Persistent OS Installer: Installs to ~/.local/share/webjarvis_petaddon with 'desktop-pet' CLI command & KDE app launcher!
 
 📁 Repository: https://github.com/Graba92/webjarvis_petaddon
