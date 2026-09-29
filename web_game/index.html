@@ -75,8 +75,14 @@
         <button class="dock-btn" onclick="openModal('room-modal')">
             <span>🏠</span> Zimmer wechseln
         </button>
+        <button id="btn-decorate" class="dock-btn" onclick="window.game?.toggleDecorateMode()" style="border-color: #f59e0b;">
+            <span>🛠️</span> Zimmer dekorieren
+        </button>
         <button class="dock-btn" onclick="openModal('snack-modal')">
             <span>🍽️</span> Füttern & Trinken
+        </button>
+        <button class="dock-btn" onclick="openModal('games-modal')">
+            <span>🎮</span> Minispiele & Fun
         </button>
         <button class="dock-btn" onclick="window.game?.petYuyu()">
             <span>💖</span> Yuyu streicheln
@@ -109,7 +115,7 @@
                 <div class="merchant-dialog-box">
                     <span style="font-size: 2rem;">🧓</span>
                     <div>
-                        <strong>Händler:</strong> „Willkommen, Reisender! Schau dich um auf meinem Wagen! Die Regale füllen sich stetig mit seltenen Stücken für dein gemütliches Heim!“
+                        <strong>Händler:</strong> „Willkommen, Reisender! Schau dich um auf meinem Wagen! Klicke direkt auf die Regale für die Highlights, oder stöbere unten im Gesamtkatalog!“
                     </div>
                 </div>
 
@@ -135,6 +141,38 @@
             </div>
             <div class="modal-body">
                 <div class="item-card-grid" id="rooms-grid"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: MINISPIELE & FUN -->
+    <div id="games-modal" class="modal-overlay">
+        <div class="modal-card" style="max-width: 650px;">
+            <div class="modal-header">
+                <h2 style="font-size: 1.2rem; color: #a855f7;">🎮 Minispiele & Aktivitäten</h2>
+                <button class="modal-close-btn" onclick="closeModal('games-modal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px;">
+                    <div class="item-card" onclick="window.game?.throwBall(); closeModal('games-modal');" style="cursor: pointer;">
+                        <div class="item-icon">🎾</div>
+                        <div class="item-title">Ball werfen</div>
+                        <div class="item-desc">Fangspiel mit Physik im Zimmer (+2 🪙)</div>
+                        <button class="buy-btn buy-coin-btn">Werfen!</button>
+                    </div>
+                    <div class="item-card" onclick="window.game?.rollDice(); closeModal('games-modal');" style="cursor: pointer;">
+                        <div class="item-icon">🎲</div>
+                        <div class="item-title">Würfel werfen</div>
+                        <div class="item-desc">Würfle eine Zahl (1-6) für Belohnungen!</div>
+                        <button class="buy-btn buy-coin-btn">Würfeln!</button>
+                    </div>
+                    <div class="item-card" onclick="window.game?.openFortuneCookie(); closeModal('games-modal');" style="cursor: pointer;">
+                        <div class="item-icon">🥠</div>
+                        <div class="item-title">Glückskeks</div>
+                        <div class="item-desc">Öffne einen Spruch (+1 ❤️ Herz)</div>
+                        <button class="buy-btn buy-heart-btn">Knacken!</button>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -198,6 +236,9 @@
             const nextWeather = weathers[(curIdx + 1) % weathers.length];
             window.game.weather = nextWeather;
             document.getElementById("weather-icon").innerText = icons[nextWeather];
+            if (window.soundEngine) {
+                window.soundEngine.toggleRainAmbient(nextWeather === "rain");
+            }
             window.game.showBanner(`Wetter gewechselt: ${nextWeather.toUpperCase()}`);
         }
 

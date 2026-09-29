@@ -1,9 +1,8 @@
 /**
  * 🐾 Tamagotchi Life: Yuyus Cozy Apartment & The Traveling Merchant
- * Core Game Engine (Canvas 60 FPS, Isometric Rooms, Care Vitals, Merchant & Economy)
+ * Complete Master Game Engine v2.0 (Decorate Mode, Ball Fetch, Dice, Multi-Sheet Actions, Weather)
  */
 
-// 1. ZIMMER-DEFINITIONEN (Aus den 6 isometrischen WebP-Dateien)
 const ROOMS = [
     { id: "zimmer5", name: "🎮 Cyber Gaming Lounge", file: "assets/zimmer5.webp", desc: "Neon, Dual-Monitor PC, Gamer-Sessel & RGB Lights" },
     { id: "zimmer6_xxx", name: "✨ Cozy Pastel Studio", file: "assets/zimmer6_xxx.webp", desc: "Pastelltöne, Lichterketten, Plüschtiere & Kuschelecke" },
@@ -13,7 +12,6 @@ const ROOMS = [
     { id: "zimmer", name: "🌸 Chibi Dream Bedroom", file: "assets/zimmer.webp", desc: "Traumhaftes Schlafzimmer mit weichen Decken" }
 ];
 
-// 2. HÄNDLER-REGAL-SLOTS (Aus händler_wagen_makierung Template)
 const MERCHANT_SLOTS = [
     { id: 1, left: 23.0, top: 44.1, width: 13.9, height: 24.8 },
     { id: 2, left: 3.8, top: 45.5, width: 17.1, height: 24.2 },
@@ -25,7 +23,6 @@ const MERCHANT_SLOTS = [
     { id: 8, left: 91.0, top: 59.8, width: 5.1, height: 11.2 }
 ];
 
-// 3. WAREN-KATALOG DES REISENDEN HÄNDLERS
 const CATALOG_ITEMS = [
     { id: "bed_deluxe", name: "🛏️ Kuscheliges Plüschbett", type: "furniture", price: 45, currency: "coin", desc: "Erhöht die Schlaferholung von Yuyu", icon: "🛏️" },
     { id: "neon_lamp", name: "💡 Cyberpunk Schreibtischlampe", type: "decor", price: 30, currency: "coin", desc: "Spendet warmes Fokuslicht", icon: "💡" },
@@ -36,21 +33,29 @@ const CATALOG_ITEMS = [
     { id: "espresso_mug", name: "☕ Feiner Espresso-Krug", type: "snack", price: 12, currency: "coin", desc: "+45% Energie für Yuyu", icon: "☕" },
     { id: "fountain_water", name: "🥤 Reines Bergquellwasser", type: "snack", price: 8, currency: "coin", desc: "+55% Hydration & Frische", icon: "🥤" },
     { id: "ps5_console", name: "🎮 Next-Gen Spielkonsole", type: "furniture", price: 12, currency: "heart", desc: "Yuyus Traum für die Gaming-Lounge", icon: "🎮" },
-    { id: "cat_tree", name: "🐾 Luxus-Kratzbaum", type: "furniture", price: 8, currency: "heart", desc: "Perfekter Aussichtsplatz fürs Kätzchen", icon: "🐾" }
+    { id: "cat_tree", name: "🐾 Luxus-Kratzbaum", type: "furniture", price: 8, currency: "heart", desc: "Perfekter Aussichtsplatz fürs Kätzchen", icon: "🐾" },
+    { id: "arcade_box", name: "🕹️ Retro Arcade-Automat", type: "furniture", price: 15, currency: "heart", desc: "Blinkende 80er-Nostalgie für die Ecke", icon: "🕹️" }
+];
+
+const FORTUNE_WISDOMS = [
+    "„Der Code, der heute sauber geschrieben wird, spart morgen zehn Tassen Kaffee.“ ✨",
+    "„Ein Bug im Code ist nur eine unentdeckte Eigenschaft.“ 🐞",
+    "„Wer Yuyu ausreichend Wasser bringt, dem gelingt jedes Git-Rebase.“ 💧",
+    "„Glück ist kein Zufall, sondern das Ergebnis guter Pausen.“ 🧘",
+    "„Große Projekte beginnen immer mit dem ersten Commit.“ 🚀"
 ];
 
 class GameEngine {
     constructor() {
         this.canvas = document.getElementById("game-canvas");
         this.ctx = this.canvas.getContext("2d");
-        
-        // Interner virtueller Canvas für gestochen scharfe Skalierung
+
         this.vWidth = 1200;
         this.vHeight = 750;
         this.canvas.width = this.vWidth;
         this.canvas.height = this.vHeight;
 
-        // Spiel-Zustand & Ökonomie
+        // Spiel-Zustand & Währungen
         this.coins = 25;
         this.hearts = 8;
         this.vitals = {
@@ -62,22 +67,23 @@ class GameEngine {
         this.level = 1;
         this.xp = 0;
         this.currentRoom = "zimmer5";
-        this.weather = "sunny"; // sunny, rain, night
+        this.weather = "sunny";
         this.isSleeping = false;
-        
+        this.decorateMode = false;
+        this.selectedProp = null;
+
         // Yuyu & Kitty State
         this.yuyu = {
             x: 600,
             y: 530,
             targetX: 600,
             targetY: 530,
-            anim: "idle",
+            anim: "idle", // idle, walk, drinking, eating, sleep, party, trip, angry
             frame: 0,
-            dir: 1, // 1 = rechts, -1 = links
+            dir: 1,
             speed: 2.2,
             blush: 0,
-            blink: 0,
-            eatingTimer: 0,
+            actionDuration: 0,
             currentSnack: null,
             speech: "Moin! Willkommen in unserem gemütlichen Zuhause! 🌸",
             speechTimer: 5.0
@@ -95,12 +101,22 @@ class GameEngine {
             actionTimer: 0
         };
 
-        // Inventar & Möbel
-        this.inventory = ["bed_deluxe", "neon_lamp", "monstera_plant"];
+        // 🎾 Minispiel Ball-Fangspiel
+        this.ball = {
+            active: false,
+            x: 0,
+            y: 0,
+            vx: 0,
+            vy: 0,
+            bounceCount: 0
+        };
+
+        // Inventar & platzierte Möbel
+        this.inventory = ["bed_deluxe", "neon_lamp", "monstera_plant", "fairy_lights"];
         this.placedFurniture = [
-            { id: "water_crate", x: 420, y: 560, w: 70, h: 70, icon: "🥤" },
-            { id: "monstera_plant", x: 790, y: 530, w: 80, h: 90, icon: "🪴" },
-            { id: "neon_lamp", x: 730, y: 480, w: 60, h: 75, icon: "💡" }
+            { id: "water_crate", name: "Wasserkasten", x: 420, y: 560, icon: "🥤" },
+            { id: "monstera_plant", name: "Monstera Pflanze", x: 790, y: 530, icon: "🪴" },
+            { id: "neon_lamp", name: "Cyber-Lampe", x: 730, y: 480, icon: "💡" }
         ];
 
         // Partikel
@@ -136,7 +152,7 @@ class GameEngine {
     }
 
     _initDustMotes() {
-        for (let i = 0; i < 28; i++) {
+        for (let i = 0; i < 32; i++) {
             this.dustMotes.push({
                 x: Math.random() * this.vWidth,
                 y: Math.random() * this.vHeight,
@@ -149,26 +165,22 @@ class GameEngine {
 
     _preloadAssets() {
         const assetList = [
-            // Zimmer
             { key: "zimmer", src: "assets/zimmer.webp" },
             { key: "zimmer2", src: "assets/zimmer2.webp" },
             { key: "zimmer3", src: "assets/zimmer3.webp" },
             { key: "zimmer4", src: "assets/zimmer4.webp" },
             { key: "zimmer5", src: "assets/zimmer5.webp" },
             { key: "zimmer6_xxx", src: "assets/zimmer6_xxx.webp" },
-            // Pet & Aktionen
             { key: "yuyu_spritesheet", src: "assets/yuyu_spritesheet.webp" },
             { key: "trinken_essen", src: "assets/trinken_essen.webp" },
             { key: "schlafen", src: "assets/schlafen.webp" },
             { key: "hinfallen", src: "assets/hinfallen.webp" },
             { key: "party_ball", src: "assets/party_ball.webp" },
             { key: "sauer", src: "assets/sauer.webp" },
-            // Props & Kätzchen
             { key: "Katze_zubehör", src: "assets/Katze_zubehör.webp" },
             { key: "bett_lape_wasser_v2", src: "assets/bett_lape_wasser_v2.webp" },
             { key: "plfanzen_patikel_lichter", src: "assets/plfanzen_patikel_lichter.webp" },
             { key: "wind_wetter", src: "assets/wind_wetter.webp" },
-            // Händler
             { key: "händler_wagen", src: "assets/händler_wagen.webp" },
             { key: "händler_1", src: "assets/händler_vor_dem_wagen1.webp" },
             { key: "händler_2", src: "assets/händler_vor_dem_wagen2.webp" },
@@ -182,54 +194,83 @@ class GameEngine {
             img.onload = () => {
                 this.loadedCount++;
                 if (this.loadedCount >= this.totalAssets) {
-                    console.log("🐾 Alle WebP-Assets geladen! Spiel startet.");
                     document.getElementById("loading-overlay")?.classList.add("hidden");
                     requestAnimationFrame(this.gameLoop.bind(this));
                 }
             };
-            img.onerror = () => {
-                console.warn("Fehler beim Laden von:", item.src);
-                this.loadedCount++;
-            };
+            img.onerror = () => this.loadedCount++;
             img.src = item.src;
             this.images[item.key] = img;
         });
     }
 
     _initEvents() {
-        // Klick in den Raum -> Yuyu hinlaufen lassen oder Objekte anklicken
-        this.canvas.addEventListener("click", (e) => {
-            const rect = this.canvas.getBoundingClientRect();
-            const scaleX = this.vWidth / rect.width;
-            const scaleY = this.vHeight / rect.height;
-            const clickX = (e.clientX - rect.left) * scaleX;
-            const clickY = (e.clientY - rect.top) * scaleY;
+        // Drag-and-Drop / Klick Event Handling
+        let isMouseDown = false;
 
-            // Klick auf das Kätzchen?
-            const kDist = Math.hypot(clickX - this.kitty.x, clickY - this.kitty.y);
-            if (kDist < 50) {
+        this.canvas.addEventListener("mousedown", (e) => {
+            isMouseDown = true;
+            const { clickX, clickY } = this._getCanvasCoords(e);
+
+            if (this.decorateMode) {
+                // Möbel anwählen zum Verschieben
+                const hitProp = this.placedFurniture.find(p => Math.hypot(clickX - p.x, clickY - p.y) < 40);
+                if (hitProp) {
+                    this.selectedProp = hitProp;
+                    window.soundEngine?.playStep();
+                    return;
+                }
+            }
+        });
+
+        this.canvas.addEventListener("mousemove", (e) => {
+            if (!isMouseDown || !this.decorateMode || !this.selectedProp) return;
+            const { clickX, clickY } = this._getCanvasCoords(e);
+            this.selectedProp.x = Math.max(220, Math.min(980, clickX));
+            this.selectedProp.y = Math.max(460, Math.min(680, clickY));
+        });
+
+        window.addEventListener("mouseup", () => {
+            if (isMouseDown && this.decorateMode && this.selectedProp) {
+                window.soundEngine?.playPlaceFurniture();
+                this._saveData();
+                this.selectedProp = null;
+            }
+            isMouseDown = false;
+        });
+
+        this.canvas.addEventListener("click", (e) => {
+            if (this.decorateMode) return;
+            const { clickX, clickY } = this._getCanvasCoords(e);
+
+            // Klick auf Kätzchen?
+            if (Math.hypot(clickX - this.kitty.x, clickY - this.kitty.y) < 50) {
                 this.petKitty();
                 return;
             }
 
             // Klick auf Yuyu?
-            const yDist = Math.hypot(clickX - this.yuyu.x, clickY - this.yuyu.y);
-            if (yDist < 60) {
+            if (Math.hypot(clickX - this.yuyu.x, clickY - this.yuyu.y) < 60) {
                 this.petYuyu();
                 return;
             }
 
-            // Klick auf ein platziertes Möbelstück?
+            // Klick auf Möbel
             for (const prop of this.placedFurniture) {
-                if (Math.abs(clickX - prop.x) < 40 && Math.abs(clickY - prop.y) < 40) {
+                if (Math.hypot(clickX - prop.x, clickY - prop.y) < 40) {
                     if (prop.id === "water_crate") {
                         this.feedSnack("water");
+                        return;
+                    }
+                    if (prop.id === "neon_lamp") {
+                        this.addParticle(prop.x, prop.y - 40, "💡 Klick!", "#fef08a");
+                        window.soundEngine?.playCoin();
                         return;
                     }
                 }
             }
 
-            // Im Raum bewegen (Innerhalb des isometrischen Fußbodens)
+            // Gehen im Raum
             const clampedY = Math.max(480, Math.min(680, clickY));
             const clampedX = Math.max(220, Math.min(980, clickX));
             this.yuyu.targetX = clampedX;
@@ -239,6 +280,16 @@ class GameEngine {
             this.addParticle(clampedX, clampedY, "✨", "#38bdf8");
             window.soundEngine?.playStep();
         });
+    }
+
+    _getCanvasCoords(e) {
+        const rect = this.canvas.getBoundingClientRect();
+        const scaleX = this.vWidth / rect.width;
+        const scaleY = this.vHeight / rect.height;
+        return {
+            clickX: (e.clientX - rect.left) * scaleX,
+            clickY: (e.clientY - rect.top) * scaleY
+        };
     }
 
     _loadSaveData() {
@@ -256,7 +307,7 @@ class GameEngine {
                 this.placedFurniture = data.placedFurniture ?? this.placedFurniture;
             }
         } catch (e) {
-            console.error("Speicherstand konnte nicht geladen werden:", e);
+            console.error("Laden fehlgeschlagen:", e);
         }
     }
 
@@ -275,20 +326,10 @@ class GameEngine {
     }
 
     // =========================================================================
-    // GAME LOOP (60 FPS)
+    // UPDATE
     // =========================================================================
-    gameLoop(now) {
-        const dt = (now - this.lastTime) / 1000.0;
-        this.lastTime = now;
-
-        this.update(dt);
-        this.render();
-
-        requestAnimationFrame(this.gameLoop.bind(this));
-    }
-
     update(dt) {
-        // 1. Ökonomie: Münzen langsam anhäufen (alle 45 Sekunden +1 Münze)
+        // 1. Münzen (sehr langsame Zunahme: 1 Münze alle 45s)
         this.coinAccTime += dt;
         if (this.coinAccTime >= 45.0) {
             this.coinAccTime = 0;
@@ -298,7 +339,7 @@ class GameEngine {
             this.showBanner("🪙 +1 Münze erhalten (Passiver Ertrag)");
         }
 
-        // 2. Ökonomie: Herzen verdienen bei optimaler Pflege (> 80% Vitals)
+        // 2. Herzen (bei hoher Versorgung > 80%)
         this.heartAccTime += dt;
         const avgVitals = (this.vitals.hunger + this.vitals.thirst + this.vitals.energy + this.vitals.affection) / 4;
         if (this.heartAccTime >= 90.0) {
@@ -311,7 +352,7 @@ class GameEngine {
             }
         }
 
-        // 3. Zufällige Geschenk-Drops von Yuyu fürs Zimmer
+        // 3. Geschenk-Drops
         this.giftCheckTime += dt;
         if (this.giftCheckTime >= 180.0) {
             this.giftCheckTime = 0;
@@ -320,70 +361,107 @@ class GameEngine {
             }
         }
 
-        // 4. Vitals Zerfall (sehr sanft)
+        // 4. Vitals Zerfall
         this.vitals.hunger = Math.max(0, this.vitals.hunger - dt * 0.05);
         this.vitals.thirst = Math.max(0, this.vitals.thirst - dt * 0.08);
         this.vitals.energy = this.isSleeping ? Math.min(100, this.vitals.energy + dt * 0.6) : Math.max(0, this.vitals.energy - dt * 0.04);
 
-        // 5. Yuyu Bewegung & Pfadfindung
-        const dx = this.yuyu.targetX - this.yuyu.x;
-        const dy = this.yuyu.targetY - this.yuyu.y;
-        const dist = Math.hypot(dx, dy);
-
-        if (dist > 5 && !this.isSleeping && this.yuyu.eatingTimer <= 0) {
-            this.yuyu.x += (dx / dist) * this.yuyu.speed;
-            this.yuyu.y += (dy / dist) * this.yuyu.speed;
-            this.yuyu.anim = "walk";
-            this.yuyu.frame += dt * 7.5;
-        } else {
-            if (this.yuyu.anim === "walk") {
+        // 5. Yuyu Bewegung
+        if (this.yuyu.actionDuration > 0) {
+            this.yuyu.actionDuration -= dt;
+            if (this.yuyu.actionDuration <= 0) {
                 this.yuyu.anim = "idle";
+                this.yuyu.currentSnack = null;
             }
-            this.yuyu.frame += dt * 3.5;
-            // Zufälliges Spazierengehen
-            if (Math.random() < 0.003 && !this.isSleeping && this.yuyu.eatingTimer <= 0) {
-                this.yuyu.targetX = 260 + Math.random() * 680;
-                this.yuyu.targetY = 500 + Math.random() * 160;
-                this.yuyu.dir = this.yuyu.targetX > this.yuyu.x ? 1 : -1;
-            }
-        }
-
-        // 6. Kätzchen folgt Yuyu mit sanftem Abstand
-        const cdx = (this.yuyu.x + (this.yuyu.dir === 1 ? -60 : 60)) - this.kitty.x;
-        const cdy = this.yuyu.y - this.kitty.y;
-        const cDist = Math.hypot(cdx, cdy);
-
-        if (cDist > 70 && !this.isSleeping) {
-            this.kitty.x += (cdx / cDist) * this.kitty.speed;
-            this.kitty.y += (cdy / cDist) * this.kitty.speed;
-            this.kitty.anim = cdx > 0 ? "walk_right" : "walk_left";
-            this.kitty.frame += dt * 6.5;
         } else {
-            this.kitty.frame += dt * 2.8;
-            this.kitty.actionTimer += dt;
-            if (this.kitty.actionTimer > 6.0) {
-                this.kitty.actionTimer = 0;
-                const r = Math.random();
-                this.kitty.anim = r < 0.4 ? "idle" : (r < 0.7 ? "groom" : "play_yarn");
+            const dx = this.yuyu.targetX - this.yuyu.x;
+            const dy = this.yuyu.targetY - this.yuyu.y;
+            const dist = Math.hypot(dx, dy);
+
+            if (dist > 6 && !this.isSleeping) {
+                this.yuyu.x += (dx / dist) * this.yuyu.speed;
+                this.yuyu.y += (dy / dist) * this.yuyu.speed;
+                this.yuyu.anim = "walk";
+                this.yuyu.frame += dt * 7.5;
+            } else {
+                if (this.yuyu.anim === "walk") this.yuyu.anim = "idle";
+                this.yuyu.frame += dt * 3.5;
+                if (Math.random() < 0.003 && !this.isSleeping) {
+                    this.yuyu.targetX = 260 + Math.random() * 680;
+                    this.yuyu.targetY = 500 + Math.random() * 160;
+                    this.yuyu.dir = this.yuyu.targetX > this.yuyu.x ? 1 : -1;
+                }
             }
         }
 
-        if (this.isSleeping) {
-            this.kitty.anim = "sleep";
+        // 6. 🎾 Ball-Physik (Fetch Minispiel)
+        if (this.ball.active) {
+            this.ball.x += this.ball.vx;
+            this.ball.y += this.ball.vy;
+            this.ball.vy += 0.25; // Schwerkraft
+
+            // Bodenkontakt
+            if (this.ball.y > 640) {
+                this.ball.y = 640;
+                this.ball.vy = -this.ball.vy * 0.65;
+                this.ball.vx *= 0.85;
+                this.ball.bounceCount++;
+                window.soundEngine?.playBallBounce();
+                if (Math.abs(this.ball.vy) < 0.8) {
+                    this.ball.vy = 0;
+                }
+            }
+            // Wände
+            if (this.ball.x < 240 || this.ball.x > 960) {
+                this.ball.vx = -this.ball.vx * 0.7;
+            }
+
+            // Yuyu & Kitty jagen den Ball
+            this.yuyu.targetX = this.ball.x;
+            this.yuyu.targetY = this.ball.y;
+            this.kitty.targetX = this.ball.x + 35;
+            this.kitty.targetY = this.ball.y;
+
+            // Ball gefangen?
+            if (Math.hypot(this.yuyu.x - this.ball.x, this.yuyu.y - this.ball.y) < 35 && Math.abs(this.ball.vy) < 1.0) {
+                this.ball.active = false;
+                this.coins += 2;
+                this.xp += 15;
+                this._checkLevelUp();
+                this.addParticle(this.yuyu.x, this.yuyu.y - 90, "🎾 Gefangen! +2 🪙", "#fbbf24");
+                window.soundEngine?.playHeart();
+                this.yuyu.speech = "Ich hab den Ball! Guter Wurf! 🎾✨";
+                this.yuyu.speechTimer = 3.5;
+            }
         }
 
-        // 7. Timer & Effekte
-        if (this.yuyu.eatingTimer > 0) {
-            this.yuyu.eatingTimer -= dt;
-        }
-        if (this.yuyu.speechTimer > 0) {
-            this.yuyu.speechTimer -= dt;
-        }
-        if (this.yuyu.blush > 0) {
-            this.yuyu.blush -= dt;
+        // 7. Kätzchen Folgelogik
+        if (!this.ball.active) {
+            const cdx = (this.yuyu.x + (this.yuyu.dir === 1 ? -60 : 60)) - this.kitty.x;
+            const cdy = this.yuyu.y - this.kitty.y;
+            const cDist = Math.hypot(cdx, cdy);
+
+            if (cDist > 70 && !this.isSleeping) {
+                this.kitty.x += (cdx / cDist) * this.kitty.speed;
+                this.kitty.y += (cdy / cDist) * this.kitty.speed;
+                this.kitty.anim = cdx > 0 ? "walk_right" : "walk_left";
+                this.kitty.frame += dt * 6.5;
+            } else {
+                this.kitty.frame += dt * 2.8;
+                this.kitty.actionTimer += dt;
+                if (this.kitty.actionTimer > 6.0) {
+                    this.kitty.actionTimer = 0;
+                    const r = Math.random();
+                    this.kitty.anim = r < 0.4 ? "idle" : (r < 0.7 ? "groom" : "play_yarn");
+                }
+            }
         }
 
-        // 8. Partikel updaten
+        if (this.isSleeping) this.kitty.anim = "sleep";
+        if (this.yuyu.speechTimer > 0) this.yuyu.speechTimer -= dt;
+        if (this.yuyu.blush > 0) this.yuyu.blush -= dt;
+
+        // Partikel
         this.particles = this.particles.filter(p => {
             p.x += p.vx;
             p.y += p.vy;
@@ -391,7 +469,6 @@ class GameEngine {
             return p.alpha > 0;
         });
 
-        // 9. Staubpartikel / Lichtstaub
         this.dustMotes.forEach(m => {
             m.y -= m.speedY;
             if (m.y < 0) {
@@ -400,15 +477,17 @@ class GameEngine {
             }
         });
 
-        // HUD updaten
         this._updateHUD();
     }
 
+    // =========================================================================
+    // RENDER
+    // =========================================================================
     render() {
         const ctx = this.ctx;
         ctx.clearRect(0, 0, this.vWidth, this.vHeight);
 
-        // 1. Isometrisches Zimmer zeichnen
+        // 1. Isometrisches Zimmer
         const roomImg = this.images[this.currentRoom];
         if (roomImg && roomImg.complete) {
             ctx.drawImage(roomImg, 0, 0, this.vWidth, this.vHeight);
@@ -417,25 +496,32 @@ class GameEngine {
             ctx.fillRect(0, 0, this.vWidth, this.vHeight);
         }
 
-        // 2. Wetter-Overlay & Lichtstimmung
+        // 2. Wetter & Ambient Overlay
         this._renderWeather();
 
-        // 3. Platzierte Möbel im Zimmer
+        // 3. Platzierte Möbel
         this.placedFurniture.forEach(prop => {
             ctx.save();
-            ctx.font = "42px sans-serif";
+            ctx.font = "44px sans-serif";
             ctx.textAlign = "center";
             ctx.textBaseline = "middle";
-            // Weicher Bodenschatten
+
             ctx.fillStyle = "rgba(0, 0, 0, 0.45)";
             ctx.beginPath();
             ctx.ellipse(prop.x, prop.y + 20, 26, 9, 0, 0, Math.PI * 2);
             ctx.fill();
+
+            if (this.decorateMode) {
+                ctx.strokeStyle = this.selectedProp === prop ? "#fbbf24" : "rgba(0, 212, 255, 0.6)";
+                ctx.lineWidth = 2;
+                ctx.strokeRect(prop.x - 30, prop.y - 30, 60, 60);
+            }
+
             ctx.fillText(prop.icon, prop.x, prop.y);
             ctx.restore();
         });
 
-        // 4. Schlafendes Kuschelbett rendern (wenn Yuyu schläft)
+        // 4. Kuschelbett
         if (this.isSleeping) {
             const propsImg = this.images["bett_lape_wasser_v2"];
             if (propsImg && propsImg.complete) {
@@ -445,13 +531,23 @@ class GameEngine {
             }
         }
 
-        // 5. Yuyu Chibi rendern
+        // 5. Yuyu Chibi
         this._renderYuyu();
 
-        // 6. Kätzchen-Begleiter rendern
+        // 6. Kätzchen
         this._renderKitty();
 
-        // 7. Schwebende Partikel (Herzen, Münzen, Sterne)
+        // 7. Tennisball (wenn aktiv)
+        if (this.ball.active) {
+            ctx.save();
+            ctx.font = "26px sans-serif";
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            ctx.fillText("🎾", this.ball.x, this.ball.y);
+            ctx.restore();
+        }
+
+        // 8. Partikel
         this.particles.forEach(p => {
             ctx.save();
             ctx.globalAlpha = Math.max(0, p.alpha);
@@ -463,7 +559,7 @@ class GameEngine {
             ctx.restore();
         });
 
-        // 8. Schwebende Lichtstaub-Partikel (Ambient Cozy Glow)
+        // 9. Lichtstaub
         ctx.save();
         this.dustMotes.forEach(m => {
             const glow = (Math.sin(performance.now() * 0.002 + m.phase) + 1) / 2;
@@ -474,9 +570,25 @@ class GameEngine {
         });
         ctx.restore();
 
-        // 9. Sprechblase von Yuyu
+        // 10. Sprechblase
         if (this.yuyu.speechTimer > 0 && !this.isSleeping) {
             this._renderSpeechBubble(this.yuyu.x, this.yuyu.y - 145, this.yuyu.speech);
+        }
+
+        // 11. Deko-Modus Banner Overlay
+        if (this.decorateMode) {
+            ctx.save();
+            ctx.fillStyle = "rgba(15, 23, 42, 0.85)";
+            ctx.strokeStyle = "#f59e0b";
+            ctx.lineWidth = 2;
+            ctx.strokeRect(300, 20, 600, 44);
+            ctx.fillRect(300, 20, 600, 44);
+            ctx.fillStyle = "#fbbf24";
+            ctx.font = "bold 16px sans-serif";
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            ctx.fillText("🛠️ Deko-Modus: Ziehe Möbel mit der Maus an ihren Platz!", 600, 42);
+            ctx.restore();
         }
     }
 
@@ -493,7 +605,6 @@ class GameEngine {
         const dx = this.yuyu.x - dw / 2;
         const dy = this.yuyu.y - dh;
 
-        // Bodenschatten
         ctx.save();
         ctx.fillStyle = "rgba(0, 0, 0, 0.45)";
         ctx.beginPath();
@@ -501,7 +612,6 @@ class GameEngine {
         ctx.fill();
         ctx.restore();
 
-        // Row/Col im Spritesheet
         let row = 0;
         let frames = 4;
         if (this.yuyu.anim === "walk") {
@@ -510,6 +620,9 @@ class GameEngine {
         } else if (this.isSleeping) {
             row = 3;
             frames = 2;
+        } else if (this.yuyu.anim === "party") {
+            row = 5;
+            frames = 4;
         }
 
         const col = Math.floor(this.yuyu.frame) % frames;
@@ -518,7 +631,7 @@ class GameEngine {
 
         ctx.drawImage(sheet, sx, sy, FRAME_W, FRAME_H, dx, dy, dw, dh);
 
-        // Errötete Bäckchen beim Streicheln
+        // Errötung
         if (this.yuyu.blush > 0) {
             ctx.save();
             ctx.fillStyle = "rgba(244, 63, 94, 0.45)";
@@ -529,8 +642,8 @@ class GameEngine {
             ctx.restore();
         }
 
-        // Snack Munching Overlay
-        if (this.yuyu.eatingTimer > 0 && this.yuyu.currentSnack) {
+        // Snack Munching
+        if (this.yuyu.actionDuration > 0 && this.yuyu.currentSnack) {
             ctx.save();
             ctx.font = "24px sans-serif";
             const bob = Math.sin(performance.now() * 0.015) * 4;
@@ -551,7 +664,6 @@ class GameEngine {
         const kx = this.kitty.x - kw / 2;
         const ky = this.kitty.y - kh;
 
-        // Kätzchen-Bodenschatten
         ctx.save();
         ctx.fillStyle = "rgba(0, 0, 0, 0.35)";
         ctx.beginPath();
@@ -587,7 +699,6 @@ class GameEngine {
         } else if (this.weather === "rain") {
             ctx.fillStyle = "rgba(15, 23, 42, 0.25)";
             ctx.fillRect(0, 0, this.vWidth, this.vHeight);
-            // Sanfte Regenstriche
             ctx.strokeStyle = "rgba(56, 189, 248, 0.25)";
             ctx.lineWidth = 1.5;
             const now = performance.now() * 0.8;
@@ -607,7 +718,7 @@ class GameEngine {
         ctx.save();
         ctx.font = "bold 13px sans-serif";
         const metrics = ctx.measureText(text);
-        const bw = Math.min(320, metrics.width + 24);
+        const bw = Math.min(340, metrics.width + 24);
         const bh = 38;
         const bx = Math.max(20, Math.min(this.vWidth - bw - 20, x - bw / 2));
         const by = y;
@@ -631,8 +742,16 @@ class GameEngine {
         ctx.restore();
     }
 
+    gameLoop(now) {
+        const dt = (now - this.lastTime) / 1000.0;
+        this.lastTime = now;
+        this.update(dt);
+        this.render();
+        requestAnimationFrame(this.gameLoop.bind(this));
+    }
+
     // =========================================================================
-    // SPIEL-AKTIONEN & INTERAKTIONEN
+    // AKTIONEN & SPIELE
     // =========================================================================
     petYuyu() {
         this.yuyu.blush = 4.0;
@@ -641,11 +760,7 @@ class GameEngine {
         this._checkLevelUp();
         this.addParticle(this.yuyu.x, this.yuyu.y - 100, "💖 +15 XP", "#f43f5e");
         window.soundEngine?.playHeart();
-        const quotes = [
-            "Du bist so lieb zu mir! 💕",
-            "Mhm, das kraulen tut gut! ✨",
-            "Beste Pflege der Welt! 🌸"
-        ];
+        const quotes = ["Du bist so lieb zu mir! 💕", "Mhm, das kraulen tut gut! ✨", "Beste Pflege der Welt! 🌸"];
         this.yuyu.speech = quotes[Math.floor(Math.random() * quotes.length)];
         this.yuyu.speechTimer = 3.5;
         this._saveData();
@@ -681,25 +796,78 @@ class GameEngine {
             window.soundEngine?.playEat();
             this.addParticle(this.yuyu.x, this.yuyu.y - 80, "+40% 🥪", "#22c55e");
         }
-        this.yuyu.eatingTimer = 2.5;
+        this.yuyu.actionDuration = 2.5;
         this.yuyu.speechTimer = 3.5;
         this.xp += 10;
         this._checkLevelUp();
         this._saveData();
     }
 
+    // 🎾 Ball werfen
+    throwBall() {
+        this.ball.active = true;
+        this.ball.x = this.vWidth / 2;
+        this.ball.y = 520;
+        this.ball.vx = (Math.random() - 0.5) * 12;
+        this.ball.vy = -7.5;
+        this.ball.bounceCount = 0;
+        this.yuyu.speech = "Ball fliegt! Den schnapp ich mir! 🎾✨";
+        this.yuyu.speechTimer = 3.0;
+        window.soundEngine?.playBallBounce();
+    }
+
+    // 🎲 Würfel werfen
+    rollDice() {
+        window.soundEngine?.playDice();
+        const roll = Math.floor(Math.random() * 6) + 1;
+        const comments = {
+            1: "Eine 1! Jeder fängt mal klein an! 🌱",
+            2: "Eine 2! Zwei Schritte voran! 🐾",
+            3: "Eine 3! Solider Schnitt! ⭐",
+            4: "Eine 4! Läuft wie geschmiert! 🚀",
+            5: "Eine 5! Fast die Höchstzahl! 🔥",
+            6: "EINE 6! Jackpot! Das bringt dir 5 Münzen! 🎉"
+        };
+        if (roll === 6) {
+            this.coins += 5;
+            this.addParticle(this.yuyu.x, this.yuyu.y - 100, "+5 🪙 Jackpot!", "#fbbf24");
+            window.soundEngine?.playCoin();
+        } else {
+            this.coins += 1;
+        }
+        this.yuyu.speech = `🎲 Würfel: ${roll}! ${comments[roll]}`;
+        this.yuyu.speechTimer = 4.0;
+        this.showBanner(`🎲 Du hast eine ${roll} gewürfelt!`);
+        this._saveData();
+    }
+
+    // 🥠 Glückskeks öffnen
+    openFortuneCookie() {
+        window.soundEngine?.playGift();
+        const wisdom = FORTUNE_WISDOMS[Math.floor(Math.random() * FORTUNE_WISDOMS.length)];
+        this.hearts += 1;
+        this.addParticle(this.yuyu.x, this.yuyu.y - 100, "+1 ❤️ Weisheit", "#f43f5e");
+        this.yuyu.speech = wisdom;
+        this.yuyu.speechTimer = 5.5;
+        this.showBanner(`🥠 Glückskeks: ${wisdom}`);
+        this._saveData();
+    }
+
     toggleSleep() {
         this.isSleeping = !this.isSleeping;
-        if (this.isSleeping) {
-            this.yuyu.speech = "Gute Nacht... Zzz... 💤";
-            this.showBanner("💤 Yuyu schläft tief und fest (Energie lädt)");
-        } else {
-            this.yuyu.speech = "Guten Morgen! Fit für neue Abenteuer! ☀️";
-            this.showBanner("☀️ Yuyu ist aufgewacht!");
-            window.soundEngine?.playLevelUp();
-        }
+        this.yuyu.speech = this.isSleeping ? "Gute Nacht... Zzz... 💤" : "Guten Morgen! Fit für neue Abenteuer! ☀️";
         this.yuyu.speechTimer = 3.0;
+        this.showBanner(this.isSleeping ? "💤 Yuyu schläft tief und fest" : "☀️ Yuyu ist aufgewacht!");
         this._saveData();
+    }
+
+    toggleDecorateMode() {
+        this.decorateMode = !this.decorateMode;
+        const btn = document.getElementById("btn-decorate");
+        if (btn) {
+            btn.innerText = this.decorateMode ? "✓ Fertig dekorieren" : "🛠️ Zimmer dekorieren";
+        }
+        this.showBanner(this.decorateMode ? "🛠️ Deko-Modus aktiv: Verschiebe Möbel mit der Maus!" : "✓ Deko-Modus beendet & gespeichert!");
     }
 
     triggerRoomGift() {
@@ -741,16 +909,12 @@ class GameEngine {
         }
     }
 
-    // =========================================================================
-    // HÄNDLER WAGEN & SHOP
-    // =========================================================================
     _refreshShopStock() {
-        // Wähle 8 zufällige Artikel für die 8 Slots
         const shuffled = [...CATALOG_ITEMS].sort(() => 0.5 - Math.random());
-        this.currentShopStock = MERCHANT_SLOTS.map((slot, idx) => {
-            const item = shuffled[idx % shuffled.length];
-            return { slot, item };
-        });
+        this.currentShopStock = MERCHANT_SLOTS.map((slot, idx) => ({
+            slot,
+            item: shuffled[idx % shuffled.length]
+        }));
     }
 
     openMerchantWagon() {
@@ -764,9 +928,7 @@ class GameEngine {
     renderMerchantView() {
         const container = document.getElementById("merchant-shelves-container");
         const charImg = document.getElementById("merchant-char-img");
-        if (charImg) {
-            charImg.src = this.merchantPoses[this.currentMerchantPoseIdx];
-        }
+        if (charImg) charImg.src = this.merchantPoses[this.currentMerchantPoseIdx];
 
         if (container) {
             container.innerHTML = "";
@@ -808,17 +970,22 @@ class GameEngine {
 
         if (!this.inventory.includes(item.id)) {
             this.inventory.push(item.id);
+            // Automatisch im Zimmer platzieren
+            this.placedFurniture.push({
+                id: item.id,
+                name: item.name,
+                x: 450 + Math.random() * 300,
+                y: 520 + Math.random() * 120,
+                icon: item.icon
+            });
         }
 
         window.soundEngine?.playCoin();
-        this.showBanner(`✓ Gekauft: ${item.name}!`);
+        this.showBanner(`✓ Gekauft & im Zimmer aufgestellt: ${item.name}!`);
         this.renderMerchantView();
         this._saveData();
     }
 
-    // =========================================================================
-    // UI HILFSMETHODEN
-    // =========================================================================
     addParticle(x, y, text, color) {
         this.particles.push({
             x, y, text, color,
@@ -856,7 +1023,6 @@ class GameEngine {
     }
 }
 
-// Globaler Spielstart
 window.addEventListener("DOMContentLoaded", () => {
     window.game = new GameEngine();
 });

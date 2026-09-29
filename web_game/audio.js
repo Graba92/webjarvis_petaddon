@@ -1,5 +1,5 @@
 /**
- * 🎵 RetroSoundEngine — Web Audio API Synthesizer
+ * 🎵 RetroSoundEngine — Web Audio API Synthesizer (Enhanced v2.0)
  * 100% Standalone (Pure Browser JS, no external audio files required)
  */
 class RetroSoundEngine {
@@ -7,6 +7,8 @@ class RetroSoundEngine {
         this.ctx = null;
         this.muted = false;
         this.volume = 0.6;
+        this.rainSource = null;
+        this.rainGain = null;
         this._initOnInteraction();
     }
 
@@ -161,11 +163,80 @@ class RetroSoundEngine {
         ], 'sine');
     }
 
+    // 🎾 Ball Hüpfen
+    playBallBounce() {
+        this.playToneSequence([
+            { freq: 360, dur: 0.05, vol: 0.3 },
+            { freq: 280, dur: 0.07, vol: 0.25 }
+        ], 'sine');
+    }
+
+    // 🎲 Würfel-Tick
+    playDice() {
+        this.playToneSequence([
+            { freq: 440, dur: 0.03, vol: 0.2 },
+            { freq: 660, dur: 0.03, vol: 0.25 },
+            { freq: 880, dur: 0.05, vol: 0.3 }
+        ], 'square');
+    }
+
+    // 🛋️ Möbel platzieren (Sanfter Thud)
+    playPlaceFurniture() {
+        this.playToneSequence([
+            { freq: 180, dur: 0.06, vol: 0.35 },
+            { freq: 120, dur: 0.10, vol: 0.3 }
+        ], 'triangle');
+    }
+
     // 🐾 Schrittchen-Klick
     playStep() {
         this.playToneSequence([
             { freq: 240, dur: 0.025, vol: 0.08 }
         ], 'triangle');
+    }
+
+    // 🌧️ Synthetisierter Ambient-Regen
+    toggleRainAmbient(enable) {
+        if (this.muted || !enable) {
+            if (this.rainSource) {
+                try { this.rainSource.stop(); } catch (e) {}
+                this.rainSource = null;
+            }
+            return;
+        }
+
+        this._ensureCtx();
+        if (!this.ctx || this.rainSource) return;
+
+        const bufferSize = this.ctx.sampleRate * 2;
+        const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+        const data = buffer.getChannelData(0);
+        let lastOut = 0.0;
+
+        // Rosa Rauschen (Pink Noise Filter) für sanften Regen
+        for (let i = 0; i < bufferSize; i++) {
+            const white = Math.random() * 2 - 1;
+            data[i] = (lastOut + (0.02 * white)) / 1.02;
+            lastOut = data[i];
+            data[i] *= 3.5;
+        }
+
+        this.rainSource = this.ctx.createBufferSource();
+        this.rainSource.buffer = buffer;
+        this.rainSource.loop = true;
+
+        const filter = this.ctx.createBiquadFilter();
+        filter.type = "lowpass";
+        filter.frequency.setValueAtTime(800, this.ctx.currentTime);
+
+        this.rainGain = this.ctx.createGain();
+        this.rainGain.gain.setValueAtTime(0.08 * this.volume, this.ctx.currentTime);
+
+        this.rainSource.connect(filter);
+        filter.connect(this.rainGain);
+        this.rainGain.connect(this.ctx.destination);
+
+        this.rainSource.start();
     }
 }
 
