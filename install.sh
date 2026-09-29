@@ -24,6 +24,7 @@ mkdir -p "$TARGET_DIR" "$BIN_DIR" "$APP_DIR"
 echo "📦 1. Synchronisiere Dateien nach $TARGET_DIR..."
 cp -rv "$SCRIPT_DIR/pet_desktop.py" "$TARGET_DIR/"
 cp -rv "$SCRIPT_DIR/run.sh" "$TARGET_DIR/"
+cp -rv "$SCRIPT_DIR/catalog_downloader.py" "$TARGET_DIR/"
 cp -rv "$SCRIPT_DIR/pets" "$TARGET_DIR/"
 
 # Berechtigungen sicherstellen

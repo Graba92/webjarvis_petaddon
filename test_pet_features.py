@@ -100,5 +100,19 @@ class TestDesktopPetSuite(unittest.TestCase):
         self.assertEqual(self.llm.detect_provider("sk-or-123456789"), "openrouter")
         self.assertEqual(self.llm.detect_provider("gsk_123456789"), "groq")
 
+    def test_sprite_atlas_analysis(self):
+        from pet_desktop import SpriteAtlas
+        atlas = SpriteAtlas(None)
+        self.assertEqual(atlas.get_frame_count("idle"), 6)
+        self.assertFalse(atlas.has_gaze_rows)
+
+        from PyQt6.QtGui import QImage
+        p = Path("pets/yuyu-chibi/spritesheet.webp")
+        if p.exists():
+            img = QImage(str(p))
+            yuyu_atlas = SpriteAtlas(img)
+            self.assertTrue(yuyu_atlas.has_gaze_rows)
+            self.assertEqual(yuyu_atlas.get_frame_count("waving"), 8)
+
 if __name__ == "__main__":
     unittest.main()

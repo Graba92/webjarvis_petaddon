@@ -49,7 +49,7 @@ from PyQt6.QtCore import (
 )
 from PyQt6.QtGui import (
     QPainter, QImage, QPixmap, QColor, QFont, QCursor, QAction, QActionGroup,
-    QPen, QBrush, QLinearGradient, QIcon, QPolygon
+    QPen, QBrush, QLinearGradient, QIcon, QPolygon, qAlpha
 )
 from PyQt6.QtWidgets import (
     QApplication, QWidget, QMenu, QDialog, QVBoxLayout, QHBoxLayout,
@@ -65,16 +65,72 @@ FRAME_HEIGHT = 208
 SPRITE_COLS = 8
 SPRITE_ROWS = 11
 
+
+class SpriteAtlas:
+    """Intelligenter Atlas-Inspector für Codex V2 / OpenPets Spritesheets.
+    Erkennt automatisch die genauen aktiven Frames pro Animationsreihe
+    und ob 16-Sektoren-Blickverfolgung (Reihe 9 & 10) unterstützt wird."""
+
+    def __init__(self, image: Optional[QImage] = None):
+        self.image = image
+        self.row_frames = [6, 8, 8, 4, 5, 8, 6, 6, 6, 0, 0]
+        self.has_gaze_rows = False
+        if image and not image.isNull():
+            self._analyze()
+
+    def _analyze(self):
+        if not self.image or self.image.isNull():
+            return
+        w = FRAME_WIDTH
+        h = FRAME_HEIGHT
+        rows_in_sheet = min(SPRITE_ROWS, self.image.height() // h)
+        detected = []
+
+        for r in range(SPRITE_ROWS):
+            if r >= rows_in_sheet:
+                detected.append(0)
+                continue
+            c_count = 0
+            for c in range(SPRITE_COLS):
+                solid = False
+                for sy in range(h // 4, 3 * h // 4, max(1, h // 6)):
+                    for sx in range(w // 4, 3 * w // 4, max(1, w // 6)):
+                        px = c * w + sx
+                        py = r * h + sy
+                        if px < self.image.width() and py < self.image.height():
+                            alpha = qAlpha(self.image.pixel(px, py))
+                            if alpha > 20:
+                                solid = True
+                                break
+                    if solid:
+                        break
+                if solid:
+                    c_count += 1
+            detected.append(c_count)
+
+        self.row_frames = detected
+        self.has_gaze_rows = (len(detected) >= 11 and detected[9] >= 6 and detected[10] >= 6)
+
+    def get_frame_count(self, anim_name: str) -> int:
+        base_cfg = ANIMATIONS.get(anim_name, ANIMATIONS["idle"])
+        r = base_cfg["row"]
+        if r < len(self.row_frames) and self.row_frames[r] > 0:
+            return self.row_frames[r]
+        return base_cfg.get("frames", 6)
+
+
 ANIMATIONS = {
-    "idle": {"row": 0, "frames": 6, "duration_ms": 4000, "loop": True},
+    "idle": {"row": 0, "frames": 6, "duration_ms": 3200, "loop": True},
     "running-right": {"row": 1, "frames": 8, "duration_ms": 950, "loop": True},
     "running-left": {"row": 2, "frames": 8, "duration_ms": 950, "loop": True},
-    "waving": {"row": 3, "frames": 4, "duration_ms": 700, "loop": False},
-    "jumping": {"row": 4, "frames": 5, "duration_ms": 840, "loop": False},
-    "failed": {"row": 5, "frames": 8, "duration_ms": 1220, "loop": False},
-    "waiting": {"row": 6, "frames": 6, "duration_ms": 1010, "loop": True},
-    "running": {"row": 7, "frames": 6, "duration_ms": 800, "loop": True},
+    "waving": {"row": 3, "frames": 8, "duration_ms": 1100, "loop": False},
+    "jumping": {"row": 4, "frames": 8, "duration_ms": 1150, "loop": False},
+    "failed": {"row": 5, "frames": 8, "duration_ms": 1220, "loop": True},
+    "waiting": {"row": 6, "frames": 6, "duration_ms": 1200, "loop": True},
+    "running": {"row": 7, "frames": 6, "duration_ms": 750, "loop": True},
     "review": {"row": 8, "frames": 6, "duration_ms": 1030, "loop": True},
+    "eating": {"row": 0, "frames": 6, "duration_ms": 1400, "loop": False},
+    "drinking": {"row": 0, "frames": 6, "duration_ms": 1400, "loop": False},
 }
 
 # 4 Auswählbare Stimmen
@@ -1629,7 +1685,7 @@ class DesktopPetWindow(QWidget):
         self.current_anim = "idle"
         self.frame_idx = 0
         self.anim_start_time = time.time()
-        self.gaze_dir = 0
+        self.gaze_dir = -1
         self.gaze_tracking_enabled = True
 
         # Autonomes Roaming
@@ -1652,6 +1708,9 @@ class DesktopPetWindow(QWidget):
         self.speech_bubble_timeout = 0.0
         self.audio_level = 0.0
         self._last_system_check = time.time()
+        self._blush_until = 0.0
+        self._last_blink_time = 0.0
+        self._next_blink_trigger = time.time() + random.uniform(2.5, 5.0)
 
         # Signale verbinden
         self.voice.speech_started.connect(self._on_speech_started)
@@ -1715,6 +1774,7 @@ class DesktopPetWindow(QWidget):
             new_img = QImage(str(sheet_path))
             if not new_img.isNull():
                 self.spritesheet = new_img
+                self.atlas = SpriteAtlas(self.spritesheet)
                 self.config.set("active_skin", skin_id)
                 self.sfx.play("level_up")
                 self.add_particle("✨", QColor(250, 204, 21))
@@ -1728,7 +1788,8 @@ class DesktopPetWindow(QWidget):
         active = self.config.get("active_skin", "yuyu-chibi")
         if active in skins:
             self.spritesheet = QImage(str(skins[active]["path"]))
-            print(f"[DesktopPet] Aktiver Skin '{active}' geladen: {skins[active]['path']}")
+            self.atlas = SpriteAtlas(self.spritesheet)
+            print(f"[DesktopPet] Aktiver Skin '{active}' geladen: {skins[active]['path']} (Atlas: {self.atlas.row_frames})")
             return
 
         script_dir = Path(__file__).resolve().parent
@@ -1740,7 +1801,10 @@ class DesktopPetWindow(QWidget):
         chosen = next((p for p in candidate_paths if p.exists()), None)
         if chosen:
             self.spritesheet = QImage(str(chosen))
+            self.atlas = SpriteAtlas(self.spritesheet)
             print(f"[DesktopPet] Spritesheet geladen: {chosen} ({self.spritesheet.width()}x{self.spritesheet.height()})")
+        else:
+            self.atlas = SpriteAtlas(None)
 
     def _update_window_size(self):
         w = int(FRAME_WIDTH * self.scale) + 40
@@ -1863,7 +1927,11 @@ class DesktopPetWindow(QWidget):
             if not self.ball_game.target_caught:
                 dist = ball_local_x - pet_center_x
                 if abs(dist) > 20:
-                    if dist > 0:
+                    if abs(dist) > 70:
+                        self.current_anim = "running"
+                        step = 5 if dist > 0 else -5
+                        self.move(self.x() + step, self.y())
+                    elif dist > 0:
                         self.current_anim = "running-right"
                         self.move(self.x() + 3, self.y())
                     else:
@@ -1881,29 +1949,60 @@ class DesktopPetWindow(QWidget):
                     self.config.add_xp(15)
                     self.voice.speak("Hab ihn gefangen! Das war ein Riesenspaß! 🎾✨")
 
-        # 3. Gaze Tracking
-        elif self.gaze_tracking_enabled and self.current_anim == "idle" and not self.tamagotchi.is_sleeping:
+        # 3. Gaze Tracking (Echte 16-Sektoren Blickverfolgung)
+        elif self.gaze_tracking_enabled and self.current_anim in ["idle", "waiting"] and not self.tamagotchi.is_sleeping:
             cursor_pos = QCursor.pos()
-            pet_center = self.mapToGlobal(QPoint(self.width() // 2, self.height() // 2))
+            pet_center = self.mapToGlobal(QPoint(self.width() // 2, self.height() // 2 + 15))
             dx = cursor_pos.x() - pet_center.x()
             dy = cursor_pos.y() - pet_center.y()
 
-            if math.hypot(dx, dy) > 35:
-                angle = (math.atan2(dy, dx) * 180.0 / math.pi) % 360.0
-                sector = int((angle + 11.25) / 22.5) % 16
-                self.gaze_dir = sector
+            if math.hypot(dx, dy) > 38 and getattr(self, "atlas", None) and self.atlas.has_gaze_rows:
+                angle = math.atan2(dx, -dy)
+                sector = int(math.floor((angle + (math.pi / 16.0)) / (math.pi / 8.0)))
+                self.gaze_dir = (sector + 16) % 16
             else:
-                self.gaze_dir = 0
+                self.gaze_dir = -1
         else:
-            self.gaze_dir = 0
+            self.gaze_dir = -1
 
-        # 4. Animations-Frame berechnen
+        # Micro-Animation: Blinzeln triggern
+        if now > getattr(self, "_next_blink_trigger", 0) and self.current_anim in ["idle", "waiting"]:
+            self._blink_until = now + 0.15
+            self._next_blink_trigger = now + random.uniform(3.0, 6.0)
+
+        # Sekundäre Neigung (Tilt) berechnen
+        if self.is_dragging:
+            self.target_tilt = math.sin(now * 12.0) * 7.0
+        elif self.current_anim in ["running", "running-right"]:
+            self.target_tilt = 4.0
+        elif self.current_anim == "running-left":
+            self.target_tilt = -4.0
+        else:
+            self.target_tilt = 0.0
+        self.current_tilt += (self.target_tilt - self.current_tilt) * 0.25
+
+        # Reaktionen auf Erschöpfung / Hunger (Reihe 5)
+        if (self.tamagotchi.hunger < 15 or self.tamagotchi.thirst < 15 or self.tamagotchi.energy < 15) and not self.tamagotchi.is_sleeping and not self.ball_game.active:
+            if self.current_anim in ["idle", "waiting"]:
+                self.current_anim = "failed"
+                self.anim_start_time = now
+        elif self.current_anim == "failed" and (self.tamagotchi.hunger >= 15 and self.tamagotchi.thirst >= 15 and self.tamagotchi.energy >= 15):
+            self.current_anim = "idle"
+            self.anim_start_time = now
+
+        # Längeres Warten -> Geduldiges Umschaun (Reihe 6)
+        if self.current_anim == "idle" and self.gaze_dir == -1 and (now - self.anim_start_time > 12.0) and not self.ball_game.active and not self.tamagotchi.is_sleeping:
+            self.current_anim = "waiting"
+            self.anim_start_time = now
+
+        # 4. Animations-Frame dynamisch berechnen
         anim_cfg = ANIMATIONS.get(self.current_anim, ANIMATIONS["idle"])
+        frames_avail = max(1, self.atlas.get_frame_count(self.current_anim) if hasattr(self, "atlas") else anim_cfg["frames"])
         elapsed_ms = int((now - self.anim_start_time) * 1000)
 
         if anim_cfg["loop"]:
             total_dur = anim_cfg["duration_ms"]
-            self.frame_idx = int((elapsed_ms % total_dur) / (total_dur / anim_cfg["frames"]))
+            self.frame_idx = int((elapsed_ms % total_dur) / (total_dur / frames_avail))
         else:
             total_dur = anim_cfg["duration_ms"]
             if elapsed_ms >= total_dur:
@@ -1911,7 +2010,7 @@ class DesktopPetWindow(QWidget):
                 self.anim_start_time = now
                 self.frame_idx = 0
             else:
-                self.frame_idx = min(anim_cfg["frames"] - 1, int(elapsed_ms / (total_dur / anim_cfg["frames"])))
+                self.frame_idx = min(frames_avail - 1, int(elapsed_ms / (total_dur / frames_avail)))
 
         # 5. Autonomes Roaming (nur wenn wach und kein Ball im Spiel)
         if self.config.get("roaming_enabled", True) and not self.is_dragging and not self.ball_game.active and not self.tamagotchi.is_sleeping:
@@ -2038,20 +2137,21 @@ class DesktopPetWindow(QWidget):
 
         # 4. Pet Sprite bilinearglättend rendern
         if self.spritesheet and not self.spritesheet.isNull():
-            anim_cfg = ANIMATIONS.get(self.current_anim, ANIMATIONS["idle"])
-            row = anim_cfg["row"]
-            col = self.frame_idx % anim_cfg["frames"]
-
-            src_x = col * FRAME_WIDTH
-            src_y = row * FRAME_HEIGHT
+            # Echte OpenPets Codex V2 16-Sektoren Blickverfolgung (Reihe 9 & 10)
+            if self.gaze_dir is not None and self.gaze_dir >= 0 and self.current_anim == "idle":
+                row = 9 if self.gaze_dir < 8 else 10
+                col = self.gaze_dir if self.gaze_dir < 8 else (self.gaze_dir - 8)
+                src_x = col * FRAME_WIDTH
+                src_y = row * FRAME_HEIGHT
+            else:
+                anim_cfg = ANIMATIONS.get(self.current_anim, ANIMATIONS["idle"])
+                row = anim_cfg["row"]
+                col = self.frame_idx % anim_cfg["frames"]
+                src_x = col * FRAME_WIDTH
+                src_y = row * FRAME_HEIGHT
 
             gaze_off_x = 0
             gaze_off_y = 0
-            if self.gaze_dir > 0 and self.current_anim == "idle":
-                rad = self.gaze_dir * (22.5 * math.pi / 180.0)
-                gaze_off_x = int(math.cos(rad) * 4)
-                gaze_off_y = int(math.sin(rad) * 3)
-
             bounce_y = int(self.audio_level * -8.0) if self.voice.is_speaking() else 0
 
             # Organische Atmung & Squash-and-Stretch Physik
@@ -2082,9 +2182,49 @@ class DesktopPetWindow(QWidget):
             if self.tamagotchi.is_sleeping:
                 painter.setOpacity(0.85)
 
+            # Sekundäre Bewegung & Körper-Neigung (Inertia Tilt)
+            painter.save()
+            anchor_x = dst_x + dst_w / 2.0
+            anchor_y = dst_y + dst_h
+            painter.translate(anchor_x, anchor_y)
+            painter.rotate(self.current_tilt)
+            painter.translate(-anchor_x, -anchor_y)
+
             target_rect = QRectF(dst_x, dst_y, dst_w, dst_h)
             source_rect = QRectF(src_x, src_y, FRAME_WIDTH, FRAME_HEIGHT)
             painter.drawImage(target_rect, self.spritesheet, source_rect)
+
+            # 4b. Micro-Animationen: Errötende Bäckchen (Blush) beim Streicheln
+            if now < self._blush_until:
+                blush_alpha = min(180, int((self._blush_until - now) / 4.5 * 180))
+                blush_col = QColor(251, 113, 133, blush_alpha)
+                painter.setPen(Qt.PenStyle.NoPen)
+                painter.setBrush(blush_col)
+                cheek_y = dst_y + int(dst_h * 0.52)
+                cheek_w = int(dst_w * 0.16)
+                cheek_h = int(dst_h * 0.08)
+                painter.drawEllipse(QRectF(dst_x + dst_w * 0.28, cheek_y, cheek_w, cheek_h))
+                painter.drawEllipse(QRectF(dst_x + dst_w * 0.56, cheek_y, cheek_w, cheek_h))
+
+            # 4c. Micro-Animation: Sanftes Blinzeln (Blink Eyelids)
+            if now < self._blink_until and self.current_anim in ["idle", "waiting"] and not self.tamagotchi.is_sleeping:
+                eye_col = QColor(40, 25, 45, 230)
+                painter.setPen(QPen(eye_col, 2.2, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
+                painter.setBrush(Qt.BrushStyle.NoBrush)
+                eye_y = dst_y + int(dst_h * 0.44)
+                ew = int(dst_w * 0.14)
+                painter.drawArc(int(dst_x + dst_w * 0.30), eye_y, ew, 10, 30 * 16, 120 * 16)
+                painter.drawArc(int(dst_x + dst_w * 0.56), eye_y, ew, 10, 30 * 16, 120 * 16)
+
+            # 4d. Snack-Munching Overlay
+            if self._snack_anim and now < self._snack_anim.get("end_time", 0):
+                snack_prog = (self._snack_anim["end_time"] - now) / 2.0
+                bob = math.sin(now * 10) * 4
+                s_icon = self._snack_anim.get("icon", "🥪")
+                painter.setFont(QFont("sans-serif", 16))
+                painter.drawText(int(dst_x + dst_w * 0.45), int(dst_y + dst_h * 0.56 + bob), s_icon)
+
+            painter.restore()
             painter.setOpacity(1.0)
 
         # 5. Schwebende Partikel zeichnen
@@ -2317,6 +2457,7 @@ class DesktopPetWindow(QWidget):
     def pet_animal(self):
         """Streicheln mit Schnurren, Herzexplosion und Affection Boost"""
         self.sfx.play("purr")
+        self._blush_until = time.time() + 4.5
         for _ in range(5):
             self.add_particle(random.choice(["💖", "💕", "✨", "🐾"]), QColor(244, 63, 94))
         self.config.add_xp(15)
@@ -2515,7 +2656,8 @@ class DesktopPetWindow(QWidget):
         msg, icon = self.tamagotchi.feed_snack(snack_type)
         self.speech_bubble_text = msg
         self.speech_bubble_timeout = time.time() + 3.5
-        self.current_anim = "waving"
+        self._snack_anim = {"icon": icon, "end_time": time.time() + 2.0}
+        self.current_anim = "eating" if snack_type in ["sandwich", "apple", "donut"] else "drinking"
         self.anim_start_time = time.time()
         self.add_particle(icon, QColor(250, 204, 21))
         self.voice.speak(msg)
