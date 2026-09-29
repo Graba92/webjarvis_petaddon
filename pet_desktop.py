@@ -135,6 +135,71 @@ ANIMATIONS = {
     "stretch": {"row": 3, "frames": 8, "duration_ms": 1600, "loop": False},
 }
 
+# Multi-Sheet High-Definition Action Animationen (1696x2528 Grid)
+ACTION_ANIMATIONS = {
+    # Schlafen, Aufwachen & Dehnen (schlafen.webp)
+    "sleep": {
+        "sheet": "schlafen", "row": 0, "start_col": 2, "frames": 4, "duration_ms": 3600, "loop": True
+    },
+    "yawn": {
+        "sheet": "schlafen", "row": 1, "start_col": 0, "frames": 7, "duration_ms": 2400, "loop": False
+    },
+    "wake_up": {
+        "sheet": "schlafen", "row": 1, "start_col": 3, "frames": 4, "duration_ms": 1600, "loop": False
+    },
+    "stretch": {
+        "sheet": "schlafen", "row": 1, "start_col": 0, "frames": 7, "duration_ms": 2400, "loop": False
+    },
+
+    # Essen & Trinken (trinken_essen.webp & party_ball.webp)
+    "drinking": {
+        "sheet": "trinken_essen", "row": 8, "start_col": 6, "frames": 2, "duration_ms": 2200, "loop": False
+    },
+    "coffee": {
+        "sheet": "trinken_essen", "row": 10, "start_col": 1, "frames": 6, "duration_ms": 2800, "loop": False
+    },
+    "eating": {
+        "sheet": "party_ball", "row": 8, "start_col": 0, "frames": 4, "duration_ms": 2400, "loop": False
+    },
+
+    # Feiern, Minispiele & Ballspiel (party_ball.webp)
+    "party": {
+        "sheet": "party_ball", "row": 6, "start_col": 0, "frames": 8, "duration_ms": 2400, "loop": True
+    },
+    "ball_throw": {
+        "sheet": "party_ball", "row": 7, "start_col": 0, "frames": 3, "duration_ms": 900, "loop": False
+    },
+    "ball_catch": {
+        "sheet": "party_ball", "row": 7, "start_col": 4, "frames": 4, "duration_ms": 1500, "loop": False
+    },
+    "fortune_cookie": {
+        "sheet": "party_ball", "row": 8, "start_col": 0, "frames": 4, "duration_ms": 2400, "loop": False
+    },
+    "roll_dice": {
+        "sheet": "party_ball", "row": 8, "start_col": 4, "frames": 4, "duration_ms": 1800, "loop": False
+    },
+
+    # Emotionale Zustände: Wut, Trauer, Jubel (sauer.webp)
+    "angry": {
+        "sheet": "sauer", "row": 9, "start_col": 4, "frames": 4, "duration_ms": 1800, "loop": True
+    },
+    "crying": {
+        "sheet": "sauer", "row": 6, "start_col": 4, "frames": 4, "duration_ms": 2200, "loop": True
+    },
+    "victory": {
+        "sheet": "sauer", "row": 7, "start_col": 0, "frames": 4, "duration_ms": 1200, "loop": True
+    },
+
+    # Physische Reaktionen: Stolpern & Entschuldigung (hinfallen.webp)
+    "trip": {
+        "sheet": "hinfallen", "row": 4, "start_col": 1, "frames": 7, "duration_ms": 2200, "loop": False
+    },
+    "apology": {
+        "sheet": "hinfallen", "row": 5, "start_col": 0, "frames": 7, "duration_ms": 2000, "loop": False
+    },
+}
+
+
 # 4 Auswählbare Stimmen
 VOICES = {
     "lola": {
@@ -1684,8 +1749,9 @@ class DesktopPetWindow(QWidget):
         self.setAttribute(Qt.WidgetAttribute.WA_NoSystemBackground, True)
         self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating, True)
 
-        # Spritesheet laden
+        # Spritesheet & Multi-Sheet Action Library laden
         self.spritesheet = None
+        self.action_sheets = {}
         self._load_spritesheet()
 
         # Skalierung & Rendering
@@ -1791,41 +1857,64 @@ class DesktopPetWindow(QWidget):
     def switch_skin(self, skin_id: str):
         skins = self.get_available_skins()
         if skin_id in skins:
-            sheet_path = skins[skin_id]["path"]
-            new_img = QImage(str(sheet_path))
-            if not new_img.isNull():
-                self.spritesheet = new_img
-                self.atlas = SpriteAtlas(self.spritesheet)
-                self.config.set("active_skin", skin_id)
-                self.sfx.play("level_up")
-                self.add_particle("✨", QColor(250, 204, 21))
-                self.speech_bubble_text = f"Neuer Skin aktiv: {skins[skin_id]['name']}!"
-                self.speech_bubble_timeout = time.time() + 3.0
-                self._init_tray_icon()
-                self.update()
+            self.config.set("active_skin", skin_id)
+            self._load_spritesheet()
+            self.sfx.play("level_up")
+            self.add_particle("✨", QColor(250, 204, 21))
+            self.speech_bubble_text = f"Neuer Skin aktiv: {skins[skin_id]['name']}!"
+            self.speech_bubble_timeout = time.time() + 3.0
+            self._init_tray_icon()
+            self.update()
 
     def _load_spritesheet(self):
         skins = self.get_available_skins()
         active = self.config.get("active_skin", "yuyu-chibi")
+        base_path = None
         if active in skins:
-            self.spritesheet = QImage(str(skins[active]["path"]))
+            base_path = skins[active]["path"]
+            self.spritesheet = QImage(str(base_path))
             self.atlas = SpriteAtlas(self.spritesheet)
-            print(f"[DesktopPet] Aktiver Skin '{active}' geladen: {skins[active]['path']} (Atlas: {self.atlas.row_frames})")
-            return
-
-        script_dir = Path(__file__).resolve().parent
-        candidate_paths = [
-            script_dir / "pets" / "yuyu-chibi" / "spritesheet.webp",
-            Path.home() / ".local" / "share" / "webjarvis_petaddon" / "pets" / "yuyu-chibi" / "spritesheet.webp",
-            Path("/home/graba/Downloads/driver-and tools/yuyu-chibi/spritesheet.webp")
-        ]
-        chosen = next((p for p in candidate_paths if p.exists()), None)
-        if chosen:
-            self.spritesheet = QImage(str(chosen))
-            self.atlas = SpriteAtlas(self.spritesheet)
-            print(f"[DesktopPet] Spritesheet geladen: {chosen} ({self.spritesheet.width()}x{self.spritesheet.height()})")
+            print(f"[DesktopPet] Aktiver Skin '{active}' geladen: {base_path} (Atlas: {self.atlas.row_frames})")
         else:
-            self.atlas = SpriteAtlas(None)
+            script_dir = Path(__file__).resolve().parent
+            candidate_paths = [
+                script_dir / "pets" / active / "spritesheet.webp",
+                script_dir / "pets" / "yuyu-chibi" / "spritesheet.webp",
+                Path.home() / ".local" / "share" / "webjarvis_petaddon" / "pets" / "yuyu-chibi" / "spritesheet.webp",
+                Path("/home/graba/Downloads/driver-and tools/yuyu-chibi/spritesheet.webp")
+            ]
+            chosen = next((p for p in candidate_paths if p.exists()), None)
+            if chosen:
+                base_path = chosen
+                self.spritesheet = QImage(str(chosen))
+                self.atlas = SpriteAtlas(self.spritesheet)
+                print(f"[DesktopPet] Spritesheet geladen: {chosen} ({self.spritesheet.width()}x{self.spritesheet.height()})")
+            else:
+                self.atlas = SpriteAtlas(None)
+
+        # Multi-Sheet High-Definition Action Library laden (z.B. pets/<skin>/actions/*.webp)
+        self.action_sheets = {}
+        candidate_act_dirs = []
+        if base_path:
+            candidate_act_dirs.append(base_path.parent / "actions")
+        script_dir = Path(__file__).resolve().parent
+        candidate_act_dirs.append(script_dir / "pets" / active / "actions")
+        candidate_act_dirs.append(script_dir / "pets" / "yuyu-chibi" / "actions")
+        candidate_act_dirs.append(Path.home() / ".local" / "share" / "webjarvis_petaddon" / "pets" / active / "actions")
+        candidate_act_dirs.append(Path.home() / ".local" / "share" / "webjarvis_petaddon" / "pets" / "yuyu-chibi" / "actions")
+
+        for d in candidate_act_dirs:
+            if d.exists() and d.is_dir():
+                for act_file in d.glob("*.webp"):
+                    if act_file.stem not in self.action_sheets:
+                        img = QImage(str(act_file))
+                        if not img.isNull():
+                            self.action_sheets[act_file.stem] = img
+                if self.action_sheets:
+                    break
+
+        if self.action_sheets:
+            print(f"[DesktopPet] {len(self.action_sheets)} High-Def Action-Sheets geladen: {list(self.action_sheets.keys())}")
 
     def _update_window_size(self):
         w = int(FRAME_WIDTH * self.scale) + 40
@@ -1962,7 +2051,10 @@ class DesktopPetWindow(QWidget):
                     # Ball gefangen!
                     self.ball_game.target_caught = True
                     self.ball_game.active = False
-                    self.current_anim = "jumping"
+                    if "party_ball" in getattr(self, "action_sheets", {}):
+                        self.current_anim = "ball_catch"
+                    else:
+                        self.current_anim = "jumping"
                     self.anim_start_time = now
                     self.sfx.play("ball_catch")
                     self.add_particle("⭐", QColor(250, 204, 21))
@@ -2004,13 +2096,27 @@ class DesktopPetWindow(QWidget):
             self.target_tilt = 0.0
         self.current_tilt += (self.target_tilt - self.current_tilt) * 0.25
 
-        # Reaktionen auf Erschöpfung / Hunger (Reihe 5)
-        if (self.tamagotchi.hunger < 15 or self.tamagotchi.thirst < 15 or self.tamagotchi.energy < 15) and not self.tamagotchi.is_sleeping and not self.ball_game.active:
-            if self.current_anim in ["idle", "waiting"]:
-                self.current_anim = "failed"
+        # Reaktionen auf Erschöpfung / Hunger / Vernachlässigung
+        if not self.tamagotchi.is_sleeping and not self.ball_game.active and not self.is_dragging:
+            if self.tamagotchi.hunger < 12 or self.tamagotchi.thirst < 12:
+                if self.current_anim in ["idle", "waiting"]:
+                    self.current_anim = "angry" if "sauer" in getattr(self, "action_sheets", {}) else "failed"
+                    self.anim_start_time = now
+            elif self.tamagotchi.energy < 12:
+                if self.current_anim in ["idle", "waiting"]:
+                    self.current_anim = "crying" if "sauer" in getattr(self, "action_sheets", {}) else "failed"
+                    self.anim_start_time = now
+            elif self.current_anim in ["angry", "crying", "failed"] and (self.tamagotchi.hunger >= 20 and self.tamagotchi.thirst >= 20 and self.tamagotchi.energy >= 20):
+                self.current_anim = "idle"
                 self.anim_start_time = now
-        elif self.current_anim == "failed" and (self.tamagotchi.hunger >= 15 and self.tamagotchi.thirst >= 15 and self.tamagotchi.energy >= 15):
-            self.current_anim = "idle"
+
+        # Schlafstatus synchronisieren
+        if self.tamagotchi.is_sleeping:
+            if self.current_anim not in ["sleep", "yawn"]:
+                self.current_anim = "sleep" if "schlafen" in getattr(self, "action_sheets", {}) else "idle"
+                self.anim_start_time = now
+        elif self.current_anim == "sleep":
+            self.current_anim = "wake_up" if "schlafen" in getattr(self, "action_sheets", {}) else "idle"
             self.anim_start_time = now
 
         # Party-Tanz Zeitüberwachung
@@ -2036,13 +2142,31 @@ class DesktopPetWindow(QWidget):
             self.current_anim = "waiting"
             self.anim_start_time = now
 
-        # 4. Animations-Frame dynamisch berechnen mit Subframe-Überblendung
-        anim_cfg = ANIMATIONS.get(self.current_anim, ANIMATIONS["idle"])
-        frames_avail = max(1, self.atlas.get_frame_count(self.current_anim) if hasattr(self, "atlas") else anim_cfg["frames"])
+        # 4. Animations-Frame dynamisch berechnen
+        anim_cfg = None
+        is_action_anim = False
+        if self.current_anim in ACTION_ANIMATIONS:
+            cand = ACTION_ANIMATIONS[self.current_anim]
+            sheet_key = cand.get("sheet")
+            if sheet_key in getattr(self, "action_sheets", {}):
+                anim_cfg = cand
+                is_action_anim = True
+
+        if not anim_cfg:
+            fallback = self.current_anim
+            if fallback in ACTION_ANIMATIONS:
+                fallback = "idle"
+            anim_cfg = ANIMATIONS.get(fallback, ANIMATIONS["idle"])
+
+        if is_action_anim:
+            frames_avail = anim_cfg["frames"]
+        else:
+            frames_avail = max(1, self.atlas.get_frame_count(self.current_anim) if hasattr(self, "atlas") else anim_cfg["frames"])
+
         elapsed_ms = (now - self.anim_start_time) * 1000.0
         total_dur = float(anim_cfg["duration_ms"])
 
-        if anim_cfg["loop"]:
+        if anim_cfg.get("loop", False):
             progress = (elapsed_ms % total_dur) / total_dur
             frame_float = progress * frames_avail
             self.frame_idx = int(frame_float) % frames_avail
@@ -2050,8 +2174,15 @@ class DesktopPetWindow(QWidget):
             self.subframe_progress = frame_float - int(frame_float)
         else:
             if elapsed_ms >= total_dur:
-                self.current_anim = "idle"
-                self.anim_start_time = now
+                if self.current_anim == "yawn" and self.tamagotchi.is_sleeping:
+                    self.current_anim = "sleep"
+                    self.anim_start_time = now
+                elif self.current_anim == "ball_throw":
+                    self.current_anim = "waiting"
+                    self.anim_start_time = now
+                else:
+                    self.current_anim = "idle"
+                    self.anim_start_time = now
                 self.frame_idx = 0
                 self.next_frame_idx = 0
                 self.subframe_progress = 0.0
@@ -2189,19 +2320,47 @@ class DesktopPetWindow(QWidget):
             painter.drawEllipse(int(self.ball_game.x - bw / 2), int(self.ball_game.y - bh), bw, bh)
 
         # 4. Pet Sprite bilinearglättend rendern
-        if self.spritesheet and not self.spritesheet.isNull():
-            # Echte OpenPets Codex V2 16-Sektoren Blickverfolgung (Reihe 9 & 10)
-            if self.gaze_dir is not None and self.gaze_dir >= 0 and self.current_anim == "idle":
-                row = 9 if self.gaze_dir < 8 else 10
-                col = self.gaze_dir if self.gaze_dir < 8 else (self.gaze_dir - 8)
-                src_x = col * FRAME_WIDTH
-                src_y = row * FRAME_HEIGHT
+        cur_img = self.spritesheet
+        is_act = False
+        start_col = 0
+        act_row = 0
+        act_frames = 6
+
+        if self.current_anim in ACTION_ANIMATIONS:
+            act_cfg = ACTION_ANIMATIONS[self.current_anim]
+            sheet_key = act_cfg.get("sheet")
+            if sheet_key in getattr(self, "action_sheets", {}):
+                cur_img = self.action_sheets[sheet_key]
+                is_act = True
+                act_row = act_cfg["row"]
+                start_col = act_cfg.get("start_col", 0)
+                act_frames = act_cfg["frames"]
+
+        if cur_img and not cur_img.isNull():
+            if is_act:
+                sh_w = cur_img.width()
+                sh_h = cur_img.height()
+                cell_w = sh_w // 8
+                col = start_col + (self.frame_idx % act_frames)
+                src_x = col * cell_w
+                src_y = int(round(act_row * (sh_h / 11.0)))
+                src_w = cell_w
+                src_h = int(round((act_row + 1) * (sh_h / 11.0))) - src_y
             else:
-                anim_cfg = ANIMATIONS.get(self.current_anim, ANIMATIONS["idle"])
-                row = anim_cfg["row"]
-                col = self.frame_idx % (self.atlas.get_frame_count(self.current_anim) if hasattr(self, "atlas") else anim_cfg["frames"])
-                src_x = col * FRAME_WIDTH
-                src_y = row * FRAME_HEIGHT
+                # Echte OpenPets Codex V2 16-Sektoren Blickverfolgung (Reihe 9 & 10)
+                if self.gaze_dir is not None and self.gaze_dir >= 0 and self.current_anim == "idle":
+                    row = 9 if self.gaze_dir < 8 else 10
+                    col = self.gaze_dir if self.gaze_dir < 8 else (self.gaze_dir - 8)
+                    src_x = col * FRAME_WIDTH
+                    src_y = row * FRAME_HEIGHT
+                else:
+                    anim_cfg = ANIMATIONS.get(self.current_anim, ANIMATIONS["idle"])
+                    row = anim_cfg["row"]
+                    col = self.frame_idx % (self.atlas.get_frame_count(self.current_anim) if hasattr(self, "atlas") else anim_cfg["frames"])
+                    src_x = col * FRAME_WIDTH
+                    src_y = row * FRAME_HEIGHT
+                src_w = FRAME_WIDTH
+                src_h = FRAME_HEIGHT
 
             gaze_off_x = 0
             gaze_off_y = 0
@@ -2226,7 +2385,7 @@ class DesktopPetWindow(QWidget):
                 painter.setOpacity(1.0)
 
             # Sekundäre Bewegung & Körper-Neigung nur anwenden, wenn signifikant
-            has_tilt = abs(self.current_tilt) > 0.4
+            has_tilt = abs(self.current_tilt) > 0.4 and not self.tamagotchi.is_sleeping
             if has_tilt:
                 painter.save()
                 anchor_x = dst_x + dst_w / 2.0
@@ -2237,8 +2396,8 @@ class DesktopPetWindow(QWidget):
 
             # Sauberes, scharfes und flackerfreies Sprite-Rendering (Codex V2 Standard)
             target_rect = QRectF(dst_x, dst_y, dst_w, dst_h)
-            source_rect = QRectF(src_x, src_y, FRAME_WIDTH, FRAME_HEIGHT)
-            painter.drawImage(target_rect, self.spritesheet, source_rect)
+            source_rect = QRectF(src_x, src_y, src_w, src_h)
+            painter.drawImage(target_rect, cur_img, source_rect)
 
             # 4b. Micro-Animationen: Errötende Bäckchen (Blush) beim Streicheln
             if now < self._blush_until:
@@ -2445,13 +2604,22 @@ class DesktopPetWindow(QWidget):
             if self.drag_moved_threshold:
                 self.config.set("pos_x", self.x())
                 self.config.set("pos_y", self.y())
-                drag_line = random.choice(OFFLINE_NAG_LINES["drag"])
-                self.speech_bubble_text = drag_line
-                self.speech_bubble_timeout = time.time() + 4.0
-                self.voice.speak(drag_line)
+                if random.random() < 0.35 and "hinfallen" in getattr(self, "action_sheets", {}):
+                    self.current_anim = "trip"
+                    self.anim_start_time = time.time()
+                    trip_line = "Huch! Fast ausgerutscht! 🙈"
+                    self.speech_bubble_text = trip_line
+                    self.speech_bubble_timeout = time.time() + 3.5
+                    self.add_particle("💨", QColor(200, 200, 200))
+                    self.voice.speak(trip_line)
+                else:
+                    drag_line = random.choice(OFFLINE_NAG_LINES["drag"])
+                    self.speech_bubble_text = drag_line
+                    self.speech_bubble_timeout = time.time() + 4.0
+                    self.voice.speak(drag_line)
             else:
                 if self.tamagotchi.is_sleeping:
-                    self.tamagotchi.toggle_sleep()
+                    self._toggle_sleep_action()
                 else:
                     click_line = random.choice(OFFLINE_NAG_LINES["click"])
                     self.speech_bubble_text = click_line
@@ -2568,6 +2736,9 @@ class DesktopPetWindow(QWidget):
     def roll_dice(self):
         """Würfelt eine Zahl von 1 bis 6 mit Soundeffekt und witzigem Kommentar"""
         self.sfx.play("dice")
+        if "party_ball" in getattr(self, "action_sheets", {}):
+            self.current_anim = "roll_dice"
+            self.anim_start_time = time.time()
         roll = random.randint(1, 6)
         dice_emojis = {1: "⚀", 2: "⚁", 3: "⚂", 4: "⚃", 5: "⚄", 6: "⚅"}
         comment = OFFLINE_NAG_LINES["dice_comments"].get(roll, "")
@@ -2581,6 +2752,9 @@ class DesktopPetWindow(QWidget):
     def open_fortune_cookie(self):
         """Öffnet einen Glückskeks mit magischem Glöckchen und Weisheit"""
         self.sfx.play("fortune")
+        if "party_ball" in getattr(self, "action_sheets", {}):
+            self.current_anim = "fortune_cookie"
+            self.anim_start_time = time.time()
         wisdom = random.choice(OFFLINE_NAG_LINES["fortune"])
         self.speech_bubble_text = wisdom
         self.speech_bubble_timeout = time.time() + 4.5
@@ -2768,13 +2942,24 @@ class DesktopPetWindow(QWidget):
         self.speech_bubble_text = msg
         self.speech_bubble_timeout = time.time() + 3.5
         self._snack_anim = {"icon": icon, "end_time": time.time() + 2.0}
-        self.current_anim = "eating" if snack_type in ["sandwich", "apple", "donut"] else "drinking"
+        has_act = hasattr(self, "action_sheets")
+        if snack_type == "water":
+            self.current_anim = "drinking" if has_act and "trinken_essen" in self.action_sheets else "drinking"
+            self.add_particle("💧", QColor(59, 130, 246))
+        elif snack_type == "coffee":
+            self.current_anim = "coffee" if has_act and "trinken_essen" in self.action_sheets else "eating"
+            self.add_particle("☕", QColor(180, 83, 9))
+        else:
+            self.current_anim = "eating" if has_act and "party_ball" in self.action_sheets else "eating"
+            self.add_particle(icon, QColor(250, 204, 21))
         self.anim_start_time = time.time()
-        self.add_particle(icon, QColor(250, 204, 21))
         self.voice.speak(msg)
 
     def _take_break_action(self):
         self.tamagotchi.take_break()
+        if "schlafen" in getattr(self, "action_sheets", {}):
+            self.current_anim = "stretch"
+            self.anim_start_time = time.time()
         self.add_particle("🧘", QColor(34, 197, 94))
         self.add_particle("✨", QColor(250, 204, 21), offset_y=-10)
 
@@ -2786,13 +2971,29 @@ class DesktopPetWindow(QWidget):
         self.speech_bubble_text = "Hui! Wo fliegt der Ball hin?! Ich krieg ihn! 🎾"
         self.speech_bubble_timeout = time.time() + 3.0
         self.sfx.play("ball_catch")
+        if "party_ball" in getattr(self, "action_sheets", {}):
+            self.current_anim = "ball_throw"
+            self.anim_start_time = time.time()
 
     def _toggle_sleep_action(self):
         is_sleeping = self.tamagotchi.toggle_sleep()
         if is_sleeping:
-            self.speech_bubble_text = "Gute Nacht... Zzz..."
-            self.speech_bubble_timeout = time.time() + 2.5
-            self.current_anim = "idle"
+            self.speech_bubble_text = "Gute Nacht... Zzz... 💤"
+            self.speech_bubble_timeout = time.time() + 3.0
+            if "schlafen" in getattr(self, "action_sheets", {}):
+                self.current_anim = "yawn"
+            else:
+                self.current_anim = "idle"
+            self.anim_start_time = time.time()
+        else:
+            self.speech_bubble_text = "Guten Morgen! Fit für den Tag! ☀️"
+            self.speech_bubble_timeout = time.time() + 3.0
+            if "schlafen" in getattr(self, "action_sheets", {}):
+                self.current_anim = "wake_up"
+            else:
+                self.current_anim = "waving"
+            self.anim_start_time = time.time()
+            self.sfx.play("happy")
         self.update()
 
     def _toggle_sfx_mute(self):
