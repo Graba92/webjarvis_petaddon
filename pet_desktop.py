@@ -2300,15 +2300,85 @@ class DesktopPetWindow(QWidget):
         QApplication.quit()
 
 
-# ==============================================================================
-# 11. HAUPTPROGRAMM (MAIN)
-# ==============================================================================
+def print_cli_status(config: ConfigManager):
+    v = config.get("vitals", {})
+    prog = config.get("progression", {})
+    lvl, title, xp = config.get_level_info()
+
+    def bar(val, length=12):
+        filled = max(0, min(length, int((val / 100.0) * length)))
+        return "█" * filled + "░" * (length - filled)
+
+    h = int(v.get("hunger", 0))
+    t = int(v.get("thirst", 0))
+    e = int(v.get("energy", 0))
+
+    print("\033[1;36m🐾 Yuyu Desktop Pet & Tamagotchi — Status\033[0m")
+    print("\033[1;30m──────────────────────────────────────────────\033[0m")
+    print(f"⭐ \033[1;33mLevel {lvl} ({title})\033[0m | {xp} / 1000 XP")
+    print(f"🥪 Hunger:  [{bar(h)}] \033[1;32m{h}%\033[0m")
+    print(f"💧 Durst:   [{bar(t)}] \033[1;34m{t}%\033[0m")
+    print(f"⚡ Energie: [{bar(e)}] \033[1;33m{e}%\033[0m")
+    print("\033[1;30m──────────────────────────────────────────────\033[0m")
+    print(f"🥤 Wasser heute: {prog.get('water_drank_today', 0)} | 🧘 Pausen: {prog.get('breaks_taken_today', 0)} | 🔥 Streak: {prog.get('streak_days', 1)} Tag(e)")
+    print("\033[1;30m──────────────────────────────────────────────\033[0m")
+
+
 def main():
+    import argparse
+    parser = argparse.ArgumentParser(description="🐾 Desktop Pet & Tamagotchi AI Companion")
+    parser.add_argument("--status", action="store_true", help="Zeigt aktuellen Tamagotchi-Status im Terminal")
+    parser.add_argument("--feed", nargs="?", const="sandwich", choices=["sandwich", "apple", "coffee", "water", "donut"], help="Füttert das Pet mit einem Snack")
+    parser.add_argument("--drink", action="store_true", help="Gibt dem Pet ein Glas Wasser (+50%% Hydration)")
+    parser.add_argument("--break", dest="take_break", action="store_true", help="Markiert eine Bildschirmpause als erledigt")
+    parser.add_argument("--say", type=str, help="Lässt das Pet eine Sprachnachricht vorlesen")
+    args, unknown = parser.parse_known_args()
+
+    config = ConfigManager()
+
+    if args.status:
+        print_cli_status(config)
+        return
+
+    if args.feed:
+        sfx = RetroSoundSynthesizer()
+        voice = VoiceEngine(config, sfx)
+        llm = LLMEngine(config)
+        tamagotchi = TamagotchiEngine(config, llm, voice, sfx)
+        msg, icon = tamagotchi.feed_snack(args.feed)
+        print(f"✓ {icon} {msg}")
+        return
+
+    if args.drink:
+        sfx = RetroSoundSynthesizer()
+        voice = VoiceEngine(config, sfx)
+        llm = LLMEngine(config)
+        tamagotchi = TamagotchiEngine(config, llm, voice, sfx)
+        msg, icon = tamagotchi.feed_snack("water")
+        print(f"✓ {icon} {msg}")
+        return
+
+    if args.take_break:
+        sfx = RetroSoundSynthesizer()
+        voice = VoiceEngine(config, sfx)
+        llm = LLMEngine(config)
+        tamagotchi = TamagotchiEngine(config, llm, voice, sfx)
+        tamagotchi.take_break()
+        print("✓ 🧘 Bildschirmpause eingetragen!")
+        return
+
+    if args.say:
+        sfx = RetroSoundSynthesizer()
+        voice = VoiceEngine(config, sfx)
+        print(f"🗣️ Spreche: „{args.say}“...")
+        voice.speak(args.say)
+        time.sleep(max(2.5, len(args.say) * 0.08))
+        return
+
     app = QApplication(sys.argv)
     app.setApplicationName("DesktopPetCompanion")
     app.setQuitOnLastWindowClosed(False)
 
-    config = ConfigManager()
     sfx = RetroSoundSynthesizer()
     voice = VoiceEngine(config, sfx)
     llm = LLMEngine(config)
