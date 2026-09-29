@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🐾 Yuyus Cozy Apartment & The Traveling Merchant</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+    <!-- Floating Top Notification Banner -->
+    <div id="floating-banner" class="floating-banner">Willkommen im gemütlichen Apartment! ✨</div>
+
+    <!-- Header HUD -->
+    <header class="glass-panel" style="margin: 10px 16px 4px;">
+        <div style="display: flex; align-items: center; gap: 14px;">
+            <div style="font-weight: 800; font-size: 1.15rem; color: #00d4ff; display: flex; align-items: center; gap: 8px;">
+                <span>🐾 Yuyu Tamagotchi Life</span>
+            </div>
+            <div class="currency-badge level-badge" id="hud-level">Lv. 1</div>
+        </div>
+
+        <!-- 2-Währungs-System: Münzen & Herzen -->
+        <div style="display: flex; align-items: center; gap: 14px;">
+            <div class="currency-badge coin-badge" title="Münzen (werden sehr langsam über Zeit passiv generiert)">
+                <span>🪙</span>
+                <span id="hud-coins">25</span>
+            </div>
+            <div class="currency-badge heart-badge" title="Herzen (verdient durch exzellente Pflege, hohe Zufriedenheit & Pausen)">
+                <span>❤️</span>
+                <span id="hud-hearts">8</span>
+            </div>
+        </div>
+
+        <!-- Vital-Werte -->
+        <div style="display: flex; align-items: center; gap: 16px;">
+            <div class="vital-bar-container" title="Hunger">
+                <span>🥪</span>
+                <div class="vital-progress">
+                    <div id="vital-hunger" class="vital-fill" style="background: #22c55e; width: 85%;"></div>
+                </div>
+            </div>
+            <div class="vital-bar-container" title="Durst">
+                <span>💧</span>
+                <div class="vital-progress">
+                    <div id="vital-thirst" class="vital-fill" style="background: #38bdf8; width: 80%;"></div>
+                </div>
+            </div>
+            <div class="vital-bar-container" title="Energie">
+                <span>⚡</span>
+                <div class="vital-progress">
+                    <div id="vital-energy" class="vital-fill" style="background: #eab308; width: 90%;"></div>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Loading Overlay -->
+    <div id="loading-overlay" style="position: fixed; inset: 0; background: #090d16; z-index: 100; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 16px;">
+        <div style="font-size: 3rem; animation: bounce 1s infinite alternate;">🐾</div>
+        <div style="font-size: 1.25rem; font-weight: 700; color: #00d4ff;">Yuyus Apartment wird eingerichtet...</div>
+        <div style="color: #94a3b8; font-size: 0.9rem;">Lade isometrische Zimmer, Sprites & Händlerwagen...</div>
+    </div>
+
+    <!-- Main Game Canvas Viewport -->
+    <main id="game-viewport-container">
+        <canvas id="game-canvas"></canvas>
+    </main>
+
+    <!-- Bottom Action Dock -->
+    <footer id="action-dock">
+        <button class="dock-btn btn-merchant" onclick="window.game?.openMerchantWagon()">
+            <span>🛒</span> Zum Reisenden Händler
+        </button>
+        <button class="dock-btn" onclick="openModal('room-modal')">
+            <span>🏠</span> Zimmer wechseln
+        </button>
+        <button class="dock-btn" onclick="openModal('snack-modal')">
+            <span>🍽️</span> Füttern & Trinken
+        </button>
+        <button class="dock-btn" onclick="window.game?.petYuyu()">
+            <span>💖</span> Yuyu streicheln
+        </button>
+        <button class="dock-btn" onclick="window.game?.petKitty()">
+            <span>🐱</span> Kätzchen kraulen
+        </button>
+        <button class="dock-btn" onclick="window.game?.toggleSleep()">
+            <span>💤</span> Schlafen legen
+        </button>
+        <button class="dock-btn" onclick="cycleWeather()">
+            <span id="weather-icon">☀️</span> Wetter ändern
+        </button>
+    </footer>
+
+    <!-- MODAL: DER REISENDE HÄNDLER (WAGON & REGAL-SLOTS) -->
+    <div id="merchant-modal" class="modal-overlay">
+        <div class="modal-card">
+            <div class="modal-header">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <span style="font-size: 1.5rem;">🛒</span>
+                    <div>
+                        <h2 style="font-size: 1.2rem; color: #f59e0b;">Der Reisende Händler</h2>
+                        <p style="font-size: 0.75rem; color: #94a3b8;">Frische Waren, Möbel & Spezialitäten auf dem Planwagen</p>
+                    </div>
+                </div>
+                <button class="modal-close-btn" onclick="closeModal('merchant-modal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="merchant-dialog-box">
+                    <span style="font-size: 2rem;">🧓</span>
+                    <div>
+                        <strong>Händler:</strong> „Willkommen, Reisender! Schau dich um auf meinem Wagen! Die Regale füllen sich stetig mit seltenen Stücken für dein gemütliches Heim!“
+                    </div>
+                </div>
+
+                <!-- Der Planwagen mit den 8 markierten Regal-Slots -->
+                <div class="merchant-view-container">
+                    <img src="assets/händler_wagen.webp" class="merchant-wagon-bg" alt="Händler Wagen">
+                    <img id="merchant-char-img" src="assets/händler_vor_dem_wagen1.webp" class="merchant-char-layer" alt="Händler">
+                    <div id="merchant-shelves-container"></div>
+                </div>
+
+                <h3 style="font-size: 1rem; margin-bottom: 12px; color: #e2e8f0;">Alle Angebote des Tages:</h3>
+                <div class="item-card-grid" id="merchant-full-catalog"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: ZIMMER WECHSELN -->
+    <div id="room-modal" class="modal-overlay">
+        <div class="modal-card">
+            <div class="modal-header">
+                <h2 style="font-size: 1.2rem; color: #00d4ff;">🏠 Yuyus Zimmer auswählen</h2>
+                <button class="modal-close-btn" onclick="closeModal('room-modal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="item-card-grid" id="rooms-grid"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: SNACK-BAR -->
+    <div id="snack-modal" class="modal-overlay">
+        <div class="modal-card" style="max-width: 580px;">
+            <div class="modal-header">
+                <h2 style="font-size: 1.2rem; color: #22c55e;">🍽️ Snack-Bar & Erfrischung</h2>
+                <button class="modal-close-btn" onclick="closeModal('snack-modal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px;">
+                    <div class="item-card" onclick="window.game?.feedSnack('water'); closeModal('snack-modal');" style="cursor: pointer;">
+                        <div class="item-icon">🥤</div>
+                        <div class="item-title">Bergquellwasser</div>
+                        <div class="item-desc">+45% Hydration</div>
+                        <button class="buy-btn buy-coin-btn">Trinken geben</button>
+                    </div>
+                    <div class="item-card" onclick="window.game?.feedSnack('sandwich'); closeModal('snack-modal');" style="cursor: pointer;">
+                        <div class="item-icon">🥪</div>
+                        <div class="item-title">Frisches Sandwich</div>
+                        <div class="item-desc">+40% Sättigung</div>
+                        <button class="buy-btn buy-coin-btn">Füttern</button>
+                    </div>
+                    <div class="item-card" onclick="window.game?.feedSnack('coffee'); closeModal('snack-modal');" style="cursor: pointer;">
+                        <div class="item-icon">☕</div>
+                        <div class="item-title">Heißer Espresso</div>
+                        <div class="item-desc">+40% Energie-Boost</div>
+                        <button class="buy-btn buy-coin-btn">Einschenken</button>
+                    </div>
+                    <div class="item-card" onclick="window.game?.feedSnack('donut'); closeModal('snack-modal');" style="cursor: pointer;">
+                        <div class="item-icon">🍩</div>
+                        <div class="item-title">Süßer Donut</div>
+                        <div class="item-desc">+35% Zuneigung</div>
+                        <button class="buy-btn buy-coin-btn">Verwöhnen</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="audio.js"></script>
+    <script src="game.js"></script>
+    <script>
+        function openModal(id) {
+            document.getElementById(id)?.classList.add("active");
+            if (id === 'room-modal') renderRoomsGrid();
+            if (id === 'merchant-modal') renderCatalogList();
+        }
+
+        function closeModal(id) {
+            document.getElementById(id)?.classList.remove("active");
+        }
+
+        function cycleWeather() {
+            if (!window.game) return;
+            const weathers = ["sunny", "rain", "night"];
+            const icons = { "sunny": "☀️", "rain": "🌧️", "night": "🌙" };
+            const curIdx = weathers.indexOf(window.game.weather);
+            const nextWeather = weathers[(curIdx + 1) % weathers.length];
+            window.game.weather = nextWeather;
+            document.getElementById("weather-icon").innerText = icons[nextWeather];
+            window.game.showBanner(`Wetter gewechselt: ${nextWeather.toUpperCase()}`);
+        }
+
+        function renderRoomsGrid() {
+            const container = document.getElementById("rooms-grid");
+            if (!container) return;
+            container.innerHTML = "";
+            ROOMS.forEach(r => {
+                const card = document.createElement("div");
+                card.className = "item-card";
+                card.style.cursor = "pointer";
+                const isCur = window.game?.currentRoom === r.id;
+                card.innerHTML = `
+                    <img src="${r.file}" style="width: 100%; aspect-ratio: 16/10; object-fit: cover; border-radius: 8px; margin-bottom: 8px;" alt="${r.name}">
+                    <div class="item-title">${isCur ? '✓ ' : ''}${r.name}</div>
+                    <div class="item-desc">${r.desc}</div>
+                    <button class="buy-btn buy-coin-btn">${isCur ? 'Aktives Zimmer' : 'Einziehen'}</button>
+                `;
+                card.onclick = () => {
+                    window.game?.switchRoom(r.id);
+                    closeModal('room-modal');
+                };
+                container.appendChild(card);
+            });
+        }
+
+        function renderCatalogList() {
+            const container = document.getElementById("merchant-full-catalog");
+            if (!container) return;
+            container.innerHTML = "";
+            CATALOG_ITEMS.forEach(item => {
+                const card = document.createElement("div");
+                card.className = "item-card";
+                const isOwned = window.game?.inventory?.includes(item.id);
+                const currIcon = item.currency === "coin" ? "🪙" : "❤️";
+                const btnClass = item.currency === "coin" ? "buy-coin-btn" : "buy-heart-btn";
+                card.innerHTML = `
+                    <div class="item-icon">${item.icon}</div>
+                    <div class="item-title">${item.name}</div>
+                    <div class="item-desc">${item.desc}</div>
+                    <button class="buy-btn ${btnClass}" ${isOwned ? 'disabled style="opacity: 0.5;"' : ''}>
+                        ${isOwned ? 'Im Besitz' : `Kaufen (${item.price} ${currIcon})`}
+                    </button>
+                `;
+                if (!isOwned) {
+                    card.onclick = () => window.game?.buyItem(item);
+                }
+                container.appendChild(card);
+            });
+        }
+    </script>
+</body>
+</html>
