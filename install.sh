@@ -39,6 +39,7 @@ chmod +x "$TARGET_DIR/pet_desktop.py" "$TARGET_DIR/run.sh"
 echo "⚡ 2. Erstelle CLI-Starter in $BIN_DIR/webjarvis-pet..."
 cat << 'EOF' > "$BIN_DIR/webjarvis-pet"
 #!/usr/bin/env bash
+export QT_QPA_PLATFORM=xcb
 exec python3 "${HOME}/.local/share/webjarvis_petaddon/pet_desktop.py" "$@"
 EOF
 chmod +x "$BIN_DIR/webjarvis-pet"

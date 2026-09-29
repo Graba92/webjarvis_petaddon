@@ -19,8 +19,16 @@ Verbesserungen:
 - Audio-Rhythmus: Bounced sanft bei aktiver Sprachausgabe (audio_level)
 """
 
-import sys
 import os
+import sys
+
+# OpenPets Linux Wayland / KDE Plasma Fix:
+# Nativer Wayland-Betrieb verbietet Top-Level-Fenstern programmatisches move() / Roaming und
+# blockiert freies Positionieren. Wie bei OpenPets forciert das Pet XWayland (xcb),
+# damit Roaming und Drag & Drop uneingeschränkt auf allen Displays funktionieren.
+if "QT_QPA_PLATFORM" not in os.environ:
+    os.environ["QT_QPA_PLATFORM"] = "xcb"
+
 import math
 import time
 import json
@@ -196,7 +204,7 @@ class DesktopPetWindow(QWidget):
         # Autonomes Roaming
         self.roam_direction = "idle"
         self.roam_end_time = 0.0
-        self.next_roam_decision = time.time() + 4.0
+        self.next_roam_decision = time.time() + 1.2
 
         # Bulletproof Drag & Drop Handling
         self.is_dragging = False
@@ -562,7 +570,7 @@ class DesktopPetWindow(QWidget):
                 self.next_roam_decision = self.roam_end_time + random.uniform(3.5, 7.0)
 
             if now < self.roam_end_time and self.roam_direction != "idle":
-                screen = QApplication.primaryScreen()
+                screen = self.screen() or QApplication.primaryScreen()
                 if screen:
                     geom = screen.availableGeometry()
                     speed = 2

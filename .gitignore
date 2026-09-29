@@ -8,3 +8,4 @@ build/
 auth.json
 .env
 .env.local
+__pycache__/
