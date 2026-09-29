@@ -2207,34 +2207,14 @@ class DesktopPetWindow(QWidget):
             gaze_off_y = 0
             bounce_y = int(self.audio_level * -8.0) if self.voice.is_speaking() else 0
 
-            # Organische Atmung & Squash-and-Stretch Physik
-            scale_mod_x = 1.0
-            scale_mod_y = 1.0
-            if self.current_anim in ["idle", "waiting"]:
-                cycle = math.sin(now * 3.2)
-                scale_mod_y = 1.0 + 0.022 * cycle
-                scale_mod_x = 1.0 - 0.012 * cycle
-            elif self.current_anim == "party":
-                cycle = math.sin(now * 10.0)
-                scale_mod_y = 1.0 + 0.07 * cycle
-                scale_mod_x = 1.0 - 0.04 * cycle
-            elif self.current_anim == "stretch":
-                cycle = math.sin(now * 3.5)
-                scale_mod_y = 1.0 + 0.16 * cycle
-                scale_mod_x = 1.0 - 0.08 * cycle
-            elif self.tamagotchi.is_sleeping:
-                cycle = math.sin(now * 1.8)
-                scale_mod_y = 1.0 + 0.035 * cycle
-                scale_mod_x = 1.0 - 0.020 * cycle
-
-            dst_w = int(FRAME_WIDTH * self.scale * scale_mod_x)
-            dst_h = int(FRAME_HEIGHT * self.scale * scale_mod_y)
-            ground_anchor_offset = int((1.0 - scale_mod_y) * (FRAME_HEIGHT * self.scale))
+            # Feste, stabile Pixelkoordinaten ohne 1-Pixel-Rundungszittern
+            dst_w = int(FRAME_WIDTH * self.scale)
+            dst_h = int(FRAME_HEIGHT * self.scale)
             dst_x = (self.width() - dst_w) // 2 + gaze_off_x
-            dst_y = self.hud_height + 25 + bounce_y + gaze_off_y + ground_anchor_offset
+            dst_y = self.hud_height + 25 + bounce_y + gaze_off_y
 
-            # Schatten
-            shadow_rect = QRectF(dst_x + 10, self.hud_height + 25 + int(FRAME_HEIGHT * self.scale) - 10, int(FRAME_WIDTH * self.scale) - 20, 10)
+            # Weicher Bodenschatten
+            shadow_rect = QRectF(dst_x + 10, self.hud_height + 25 + dst_h - 10, dst_w - 20, 10)
             painter.setPen(Qt.PenStyle.NoPen)
             painter.setBrush(QColor(0, 0, 0, 75))
             painter.drawEllipse(shadow_rect)
@@ -2242,32 +2222,23 @@ class DesktopPetWindow(QWidget):
             # Wenn schlafend: leicht abgedunkelt
             if self.tamagotchi.is_sleeping:
                 painter.setOpacity(0.85)
+            else:
+                painter.setOpacity(1.0)
 
-            # Sekundäre Bewegung & Körper-Neigung (Inertia Tilt)
-            painter.save()
-            anchor_x = dst_x + dst_w / 2.0
-            anchor_y = dst_y + dst_h
-            painter.translate(anchor_x, anchor_y)
-            painter.rotate(self.current_tilt)
-            painter.translate(-anchor_x, -anchor_y)
+            # Sekundäre Bewegung & Körper-Neigung nur anwenden, wenn signifikant
+            has_tilt = abs(self.current_tilt) > 0.4
+            if has_tilt:
+                painter.save()
+                anchor_x = dst_x + dst_w / 2.0
+                anchor_y = dst_y + dst_h
+                painter.translate(anchor_x, anchor_y)
+                painter.rotate(self.current_tilt)
+                painter.translate(-anchor_x, -anchor_y)
 
+            # Sauberes, scharfes und flackerfreies Sprite-Rendering (Codex V2 Standard)
             target_rect = QRectF(dst_x, dst_y, dst_w, dst_h)
             source_rect = QRectF(src_x, src_y, FRAME_WIDTH, FRAME_HEIGHT)
-
-            # Fluid 60 FPS Subframe Alpha Blending
-            if self.config.get("smooth_blend", True) and getattr(self, "next_frame_idx", 0) != self.frame_idx and self.gaze_dir == -1:
-                next_src_x = self.next_frame_idx * FRAME_WIDTH
-                next_source_rect = QRectF(next_src_x, src_y, FRAME_WIDTH, FRAME_HEIGHT)
-                sub_prog = getattr(self, "subframe_progress", 0.0)
-
-                painter.setOpacity(1.0 - (sub_prog * 0.45))
-                painter.drawImage(target_rect, self.spritesheet, source_rect)
-
-                painter.setOpacity(sub_prog * 0.45)
-                painter.drawImage(target_rect, self.spritesheet, next_source_rect)
-                painter.setOpacity(1.0)
-            else:
-                painter.drawImage(target_rect, self.spritesheet, source_rect)
+            painter.drawImage(target_rect, self.spritesheet, source_rect)
 
             # 4b. Micro-Animationen: Errötende Bäckchen (Blush) beim Streicheln
             if now < self._blush_until:
@@ -2299,7 +2270,8 @@ class DesktopPetWindow(QWidget):
                 painter.setFont(QFont("sans-serif", 16))
                 painter.drawText(int(dst_x + dst_w * 0.45), int(dst_y + dst_h * 0.56 + bob), s_icon)
 
-            painter.restore()
+            if has_tilt:
+                painter.restore()
             painter.setOpacity(1.0)
 
         # 5. Schwebende Partikel zeichnen
