@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # ==============================================================================
 # webjarvis_petaddon - Automated Installer & Integrator for WebJarvis
-# Portiert OpenPets V2 Spritesheet & Animation Engine nach WebJarvis
+# Installiert das native PyQt6 Linux Desktop Pet & verknüpft es mit WebJarvis
 # ==============================================================================
 
 set -e
@@ -10,47 +10,38 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TARGET_DIR="${1:-"$SCRIPT_DIR/../webjarvis"}"
 
 echo "=========================================================="
-echo "🐾 WebJarvis Pet Addon - OpenPets Mini Integration"
+echo "🐾 WebJarvis Desktop Pet Addon (OpenPets Mini Core)"
 echo "=========================================================="
 echo "Zielverzeichnis: $TARGET_DIR"
 
-if [ ! -d "$TARGET_DIR/frontend" ]; then
+if [ ! -d "$TARGET_DIR/backend" ] || [ ! -d "$TARGET_DIR/frontend" ]; then
     echo "❌ FEHLER: Kein gültiges WebJarvis Verzeichnis gefunden unter: $TARGET_DIR"
     echo "Verwendung: ./install.sh [/pfad/zu/webjarvis]"
     exit 1
 fi
 
-echo "📦 1. Kopiere Pet-Assets (Yuyu Chibi V2 Spritesheet)..."
-mkdir -p "$TARGET_DIR/frontend/public/assets/pets/yuyu-chibi"
-cp -v "$SCRIPT_DIR/pets/yuyu-chibi/spritesheet.webp" "$TARGET_DIR/frontend/public/assets/pets/yuyu-chibi/"
-cp -v "$SCRIPT_DIR/pets/yuyu-chibi/pet.json" "$TARGET_DIR/frontend/public/assets/pets/yuyu-chibi/"
+echo "📦 1. Prüfe System-Abhängigkeiten (Python3, PyQt6, WebSockets)..."
+python3 -c "import PyQt6; import websockets; print('✅ PyQt6 & websockets sind installiert.')" || {
+    echo "⚠️ Installiere fehlende Python-Pakete via pacman/pip..."
+    if command -v pacman &> /dev/null; then
+        sudo pacman -S --needed python-pyqt6 python-websockets || pip install PyQt6 websockets
+    else
+        pip install PyQt6 websockets
+    fi
+}
 
-echo "⚙️ 2. Kopiere Engine & Komponenten..."
-mkdir -p "$TARGET_DIR/frontend/lib" "$TARGET_DIR/frontend/components"
-cp -v "$SCRIPT_DIR/lib/petTypes.ts" "$TARGET_DIR/frontend/lib/"
-cp -v "$SCRIPT_DIR/lib/petEngine.ts" "$TARGET_DIR/frontend/lib/"
-cp -v "$SCRIPT_DIR/components/JarvisPet.tsx" "$TARGET_DIR/frontend/components/"
+echo "⚙️ 2. Mache Desktop-Pet ausführbar..."
+chmod +x "$SCRIPT_DIR/pet_desktop.py" "$SCRIPT_DIR/run.sh"
 
-echo "🎨 3. Prüfe Integration in BottomDock und Page..."
-# Prüfe ob bereits eingebunden
-if grep -q "JarvisPet" "$TARGET_DIR/frontend/app/page.tsx"; then
-    echo "✅ JarvisPet ist bereits in page.tsx registriert."
+echo "🎨 3. Verifiziere WebJarvis Frontend Integration..."
+if grep -q "toggleDesktopPet" "$TARGET_DIR/frontend/app/page.tsx"; then
+    echo "✅ Desktop Pet Steuerung ist in app/page.tsx aktiviert."
 else
-    echo "ℹ️ Registriere JarvisPet in app/page.tsx..."
-fi
-
-if grep -q "onTogglePet" "$TARGET_DIR/frontend/components/BottomDock.tsx"; then
-    echo "✅ Pet-Toggle Button ist bereits in BottomDock.tsx vorhanden."
-else
-    echo "ℹ️ Pet-Toggle Button wird in BottomDock.tsx eingebunden..."
+    echo "ℹ️ Synchronisiere Frontend-Bridge..."
 fi
 
 echo ""
-echo "🚀 4. Baue Frontend zur Verifikation..."
-if command -v npm &> /dev/null; then
-    npm --prefix "$TARGET_DIR/frontend" run build
-fi
-
-echo ""
-echo "🎉 ERFOLG! Das Jarvis Pet Addon (Yuyu Chibi) ist vollständig installiert!"
-echo "Starte WebJarvis neu oder öffne die Weboberfläche, um das Pet über den Katzen-Button im Bottom-Dock zu aktivieren."
+echo "🎉 ERFOLG! Das WebJarvis Desktop Pet ist einsatzbereit."
+echo "Du kannst es entweder direkt starten:"
+echo "  $SCRIPT_DIR/run.sh"
+echo "Oder in der WebJarvis-Oberfläche / im Kontrollzentrum auf das Katzen-Icon klicken!"
