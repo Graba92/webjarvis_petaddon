@@ -2054,13 +2054,26 @@ class DesktopPetWindow(QWidget):
 
             bounce_y = int(self.audio_level * -8.0) if self.voice.is_speaking() else 0
 
-            dst_w = int(FRAME_WIDTH * self.scale)
-            dst_h = int(FRAME_HEIGHT * self.scale)
+            # Organische Atmung & Squash-and-Stretch Physik
+            scale_mod_x = 1.0
+            scale_mod_y = 1.0
+            if self.current_anim in ["idle", "waiting"]:
+                cycle = math.sin(now * 3.2)
+                scale_mod_y = 1.0 + 0.022 * cycle
+                scale_mod_x = 1.0 - 0.012 * cycle
+            elif self.tamagotchi.is_sleeping:
+                cycle = math.sin(now * 1.8)
+                scale_mod_y = 1.0 + 0.035 * cycle
+                scale_mod_x = 1.0 - 0.020 * cycle
+
+            dst_w = int(FRAME_WIDTH * self.scale * scale_mod_x)
+            dst_h = int(FRAME_HEIGHT * self.scale * scale_mod_y)
+            ground_anchor_offset = int((1.0 - scale_mod_y) * (FRAME_HEIGHT * self.scale))
             dst_x = (self.width() - dst_w) // 2 + gaze_off_x
-            dst_y = self.hud_height + 25 + bounce_y + gaze_off_y
+            dst_y = self.hud_height + 25 + bounce_y + gaze_off_y + ground_anchor_offset
 
             # Schatten
-            shadow_rect = QRectF(dst_x + 10, dst_y + dst_h - 10, dst_w - 20, 10)
+            shadow_rect = QRectF(dst_x + 10, self.hud_height + 25 + int(FRAME_HEIGHT * self.scale) - 10, int(FRAME_WIDTH * self.scale) - 20, 10)
             painter.setPen(Qt.PenStyle.NoPen)
             painter.setBrush(QColor(0, 0, 0, 75))
             painter.drawEllipse(shadow_rect)
