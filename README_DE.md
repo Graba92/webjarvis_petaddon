@@ -1,4 +1,4 @@
-# 🐾 Desktop Pet & Tamagotchi AI Companion (OpenPets Mini Core)
+# 🐾 Desktop Pet & Tamagotchi AI Companion v2.5 (OpenPets Mini Core)
 
 [🇩🇪 Zur deutschen Dokumentation wechseln](README_DE.md) | [🇬🇧 Switch to English Documentation](README.md)
 
@@ -6,11 +6,11 @@ Ein interaktiver, animierter **vollständig eigenständiger Linux Desktop Compan
 
 ---
 
-## ✨ Hauptfunktionen
+## ✨ Neue & Erweiterte Highlights (v2.5)
 
 - **🖥️ 100% Standalone Desktop-Begleiter**: Läuft vollkommen unabhängig als native PyQt6-Anwendung direkt auf deinem Bildschirm – ohne Webbrowser oder externe Server.
-- **🤖 Beliebiges LLM über API-Key konfigurierbar**:
-  - Unterstützt **Google Gemini**, **OpenAI**, **Groq**, **OpenRouter**, **Ollama** oder benutzerdefinierte Base-URLs.
+- **🤖 Universelle KI-Anbindung (Egal welches LLM)**:
+  - Voll konfigurierbar für **Google Gemini**, **OpenAI**, **Groq**, **OpenRouter**, **Ollama** oder jede benutzerdefinierte Base-URL.
   - Erkennt eingetragene API-Keys automatisch (`AIzaSy...`, `sk-...`, `gsk_...`).
   - **Offline-Garantie:** Funktioniert auch komplett ohne API-Key und ohne Internet mit über 40 handgeschriebenen witzigen deutschen Sprüchen!
 - **🎙️ 4 Charakter-Stimmen zur freien Auswahl**:
@@ -26,20 +26,32 @@ Ein interaktiver, animierter **vollständig eigenständiger Linux Desktop Compan
     - ⚡ **Energie / Bildschirmpause** (0 - 100%, schützt vor Übermüdung)
     - 📅 **Nächster Termin & Countdown**
   - **Farbcodierung:** Grün (>50%) ➔ Gelb (25-50%) ➔ Alarm-Rot (<25%).
-- **😼 Die kleine Nervensäge (Nagging Companion)**:
-  - Fällt einer deiner Werte unter 25%, gibt das Pet keine Ruhe mehr:
-    - Es springt aufgeregt auf und ab.
-    - Eine Comic-Sprechblase mit einem frechen Spruch erscheint.
-    - Es spricht dich mit der gewählten Stimme laut an, damit du endlich aufstehst, Wasser trinkst oder Pause machst!
-  - Wählbare Intensität: *Sanfte Erinnerung*, *Frecher Begleiter* oder *Extreme Nervensäge*.
-- **🥪 Interaktive Pflege ("Füttern & Tränken")**:
-  - Rechtsklick auf das Pet für sofortige Aktionen:
-    - 🥪 *Snack / Mahlzeit gegessen* (+50% Hunger)
-    - 💧 *Glas Wasser getrunken* (+50% Durst)
-    - 🧘 *Pause gemacht & gestreckt* (+100% Energie)
-- **📅 Integrierter Terminkalender & Erinnerungen**:
-  - Eigene Termine mit Datum & Uhrzeit eintragen.
-  - Das Pet alarmiert dich pünktlich mit Sprachausgabe und Sprechblase.
+- **🎾 Interaktives Ball-Fangspiel (Fetch Game)**:
+  - Rechtsklick ➔ *🎾 Ball werfen (Fangspiel)*: Ein kleiner Tennisball hüpft physikalisch korrekt über deinen Desktop!
+  - Yuyu rennt aufgeregt hinterher, fängt den Ball mit einem Freudensprung, spielt einen Fang-Sound ab und bringt ihn stolz zurück!
+- **💤 Schlaf- & DND-Nachtmodus (Deep Sleep)**:
+  - Rechtsklick ➔ *💤 Schlafen legen (Zzz... DND)*: Yuyu rollt sich friedlich zusammen, blaue `Zzz...`-Partikel steigen auf.
+  - Im Schlafmodus sind alle Nervensägen-Alarme stummgeschaltet, damit du ungestört arbeiten kannst.
+- **🍅 Pomodoro Fokus-Trainer (25m / 5m)**:
+  - Integrierter Pomodoro-Timer im HUD. Yuyu feuert dich an und ruft nach 25 Minuten pünktlich zur 5-Minuten-Pause auf.
+- **⭐ RPG Progression & Level-System**:
+  - Sammle Erfahrungspunkte (XP) für jedes getrunkene Glas Wasser (+25 XP), Pausen (+35 XP), Snacks und Fangspiele!
+  - Steige auf: *Neuling* ➔ *Bekannter* ➔ *Kumpel* ➔ *Guter Freund* ➔ *Bester Freund* ➔ *Seelenverwandter*!
+- **🍽️ Snack-Bar (5 verschiedene Snacks)**:
+  - 🥪 *Sandwich / Mahlzeit* (+50% Hunger)
+  - 🍎 *Knackiger Apfel* (+25% Hunger, +10% Vitalität)
+  - ☕ *Heißer Kaffee / Espresso* (+40% Energie-Boost)
+  - 🥤 *Frisches Glas Wasser* (+50% Hydration)
+  - 🍩 *Süßer Donut* (+30% Hunger, +10 Zuneigung)
+- **🎵 Pure Python Retro-Soundeffekte (SFX)**:
+  - Eingebauter Synthesizer (Happy Arpeggio, Level-Up Fanfare, Notstand-Alarm, Schlummerton, Pomodoro-Gong) ohne externe Libraries.
+- **🎨 4 Wählbare HUD-Themes**:
+  - 🔵 **Cyberpunk Neon** (Cyan & Dunkelblau)
+  - 🟢 **Gameboy Retro** (Vintage Matrix-Grün)
+  - 🌸 **Kawaii Pastel** (Sakura-Rosa & Flieder)
+  - 🌙 **Minimal Slate** (Dezentes Schiefergrau & Silber)
+- **📊 Health-Dashboard & Statistiken**:
+  - Zählt getrunkene Gläser Wasser, Mahlzeiten, Pausen, Pomodoros und konsekutive Streak-Tage!
 - **🎨 Kristallklares Rendering & Wayland-Kompatibilität**:
   - Bilineare Kantenglättung (`SmoothTransformation`) – keine Pixel-Treppen.
   - Erzwingt `QT_QPA_PLATFORM=xcb` (XWayland), wodurch freies Drag & Drop und Roaming unter KDE Plasma Wayland perfekt funktionieren.
@@ -60,7 +72,7 @@ chmod +x install.sh
 Nach der Installation:
 - **Terminal-Befehl:** `desktop-pet` (oder `webjarvis-pet`)
 - **KDE / CachyOS Startmenü:** Unter *Dienstprogramme / Utilities* als „Desktop Pet & Tamagotchi AI (Yuyu)“
-- **Konfiguration:** Rechtsklick auf das Pet ➔ *⚙️ Einstellungen & KI-Konfiguration...*
+- **Konfiguration:** Rechtsklick auf das Pet ➔ *⚙️ Einstellungen & Dashboard...*
 
 ---
 
@@ -69,8 +81,8 @@ Nach der Installation:
 Alle Einstellungen werden automatisch in `~/.config/desktop_pet/config.json` gespeichert:
 - API-Keys und Modellwahl
 - Ausgewählte Stimme & Lautstärke
-- Tamagotchi-Verfallszeiten (Minuten bis Durst/Hunger/Pause)
-- Nerv-Häufigkeit & Intensität
+- Tamagotchi-Verfallszeiten & HUD-Theme
+- RPG Level, Zuneigung & Tages-Statistiken
 - Termine und Fensterposition
 
 ---

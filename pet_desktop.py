@@ -1,27 +1,32 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-🐾 Desktop Pet & Tamagotchi AI Companion (OpenPets Mini Core)
+🐾 Desktop Pet & Tamagotchi AI Companion v2.5 (OpenPets Mini Core)
 Eigenständiges, plattformübergreifendes Linux Desktop-Overlay (KDE Plasma / CachyOS / X11 / Wayland).
 
-Features:
+Erweiterte Features:
 - 100% Standalone (Keine Abhängigkeit von WebJarvis oder externen Servern)
 - Universelle LLM-Konfiguration: Kompatibel mit jedem LLM (Gemini, OpenAI, OpenRouter, Groq, Ollama) über API-Key
 - 4 Charakter-Stimmen (Lola, Buster, Mimi, Klaus) mit Neural-TTS / Fallback
-- Tamagotchi-System: Hunger, Durst, Energie/Pause & Termine mit Live-Statusanzeige über dem Pet
+- Echtes Tamagotchi-System: Hunger, Durst, Energie/Pause & Termine mit Live-Statusanzeige über dem Pet
 - Die kleine Nervensäge: Erinnert aktiv, frech und humorvoll an Trinken, Pausen, Essen und Termine
+- 🎾 Interaktives Ball-Fangspiel (Fetch Game) mit Desktop-Physik & Ball-Jagd
+- 💤 Schlaf- & DND-Nachtmodus (Deep Sleep) mit Zzz-Partikeln & stummen Alarmen
+- 🍅 Integrierter Pomodoro-Fokus-Trainer (25 Min Arbeit / 5 Min Pause) mit Pet-Anfeuerung
+- ⭐ RPG Progression & Level-System (XP für Wasser, Pausen, Snacks, Zuneigung)
+- 🍔 Snack-Bar (Sandwich, Apfel, Kaffee, Wasser, Donut) mit schwebenden Emojis & SFX
+- 🎵 Akustische Retro-Soundeffekte (Chimes für Füttern, Level-Up, Notstand, Pomodoro)
+- 🎨 4 wählbare HUD-Themes (Cyberpunk Neon, Gameboy Retro, Kawaii Pastel, Minimal Slate)
+- 📊 Ausführliches Health-Dashboard & Statistiken (Tageszähler & Streak)
 - Kristallklares Rendering mit bilinearem Anti-Aliasing (SmoothTransformation)
 - Wayland / KDE Plasma kompatibel durch erzwungenes XWayland (xcb)
 - 16-Sektoren Blickverfolgung & autonomes Roaming entlang des Bildschirms
-- Umfangreiches Einstellungsfenster & Rechtsklick-Menü
 """
 
 import os
 import sys
 
 # Linux Wayland / KDE Plasma Fix:
-# Nativer Wayland-Betrieb verbietet Fenstern programmatisches move() / Roaming und
-# blockiert freies Positionieren. Erzwinge XWayland (xcb), genau wie OpenPets.
 if "QT_QPA_PLATFORM" not in os.environ:
     os.environ["QT_QPA_PLATFORM"] = "xcb"
 
@@ -29,6 +34,8 @@ import math
 import time
 import json
 import random
+import wave
+import struct
 import urllib.request
 import urllib.parse
 import subprocess
@@ -38,7 +45,7 @@ from pathlib import Path
 from typing import Optional, Dict, Any, List
 
 from PyQt6.QtCore import (
-    Qt, QTimer, QPoint, QRect, QRectF, pyqtSignal, QObject, QDate, QTime
+    Qt, QTimer, QPoint, QPointF, QRect, QRectF, pyqtSignal, QObject, QDate, QTime
 )
 from PyQt6.QtGui import (
     QPainter, QImage, QPixmap, QColor, QFont, QCursor, QAction, QActionGroup,
@@ -48,7 +55,7 @@ from PyQt6.QtWidgets import (
     QApplication, QWidget, QMenu, QDialog, QVBoxLayout, QHBoxLayout,
     QLabel, QLineEdit, QPushButton, QComboBox, QSlider, QCheckBox,
     QTabWidget, QTableWidget, QTableWidgetItem, QHeaderView, QMessageBox,
-    QTimeEdit, QDateEdit, QSpinBox, QGroupBox
+    QTimeEdit, QDateEdit, QSpinBox, QGroupBox, QProgressBar
 )
 
 # OpenPets Codex V2 Spritesheet Spezifikation
@@ -101,6 +108,61 @@ VOICES = {
     }
 }
 
+# 4 Wählbare HUD Themes
+HUD_THEMES = {
+    "cyberpunk": {
+        "name": "Cyberpunk Neon",
+        "bg": QColor(10, 15, 25, 220),
+        "border": QColor(0, 212, 255, 140),
+        "text": QColor(255, 255, 255),
+        "accent": QColor(0, 212, 255),
+        "hunger": QColor(34, 197, 94),
+        "thirst": QColor(6, 182, 212),
+        "energy": QColor(245, 158, 11)
+    },
+    "gameboy": {
+        "name": "Gameboy Retro",
+        "bg": QColor(15, 56, 15, 230),
+        "border": QColor(139, 172, 15, 180),
+        "text": QColor(155, 188, 15),
+        "accent": QColor(139, 172, 15),
+        "hunger": QColor(139, 172, 15),
+        "thirst": QColor(48, 98, 48),
+        "energy": QColor(139, 172, 15)
+    },
+    "kawaii": {
+        "name": "Kawaii Pastel",
+        "bg": QColor(30, 20, 35, 220),
+        "border": QColor(244, 114, 182, 160),
+        "text": QColor(255, 240, 245),
+        "accent": QColor(244, 114, 182),
+        "hunger": QColor(251, 146, 60),
+        "thirst": QColor(167, 139, 250),
+        "energy": QColor(244, 114, 182)
+    },
+    "minimal": {
+        "name": "Minimal Slate",
+        "bg": QColor(24, 28, 38, 225),
+        "border": QColor(100, 116, 139, 140),
+        "text": QColor(226, 232, 240),
+        "accent": QColor(148, 163, 184),
+        "hunger": QColor(52, 211, 153),
+        "thirst": QColor(56, 189, 248),
+        "energy": QColor(251, 191, 36)
+    }
+}
+
+# Level-Titel
+LEVEL_TITLES = [
+    (0, "Neuling"),
+    (100, "Bekannter"),
+    (250, "Kumpel"),
+    (500, "Guter Freund"),
+    (900, "Bester Freund"),
+    (1500, "Seelenverwandter"),
+    (2500, "Unzertrennlich ✨")
+]
+
 # Offline-Repertoire für freche Nervensägen-Sprüche
 OFFLINE_NAG_LINES = {
     "thirst": [
@@ -148,7 +210,186 @@ OFFLINE_NAG_LINES = {
 
 
 # ==============================================================================
-# 1. KONFIGURATIONS-MANAGER
+# 1. AKUSTISCHER RETRO SOUND-SYNTHESIZER (PURE PYTHON SFX)
+# ==============================================================================
+class RetroSoundSynthesizer:
+    """Erzeugt 16-Bit PCM Chimes für Spiele, Notstände & Level-Ups ohne externe Libs"""
+
+    CACHE_DIR = Path("/tmp/desktop_pet_sfx")
+
+    def __init__(self):
+        self.CACHE_DIR.mkdir(parents=True, exist_ok=True)
+        self._ensure_chimes()
+
+    def _generate_wav(self, path: Path, freqs: List[float], tone_dur: float, decay: float, vol: float = 0.5):
+        sample_rate = 22050
+        frames = []
+        for f in freqs:
+            n_samples = int(sample_rate * tone_dur)
+            for s in range(n_samples):
+                t = s / sample_rate
+                env = math.exp(-decay * (s / n_samples))
+                val = math.sin(2.0 * math.pi * f * t) * vol * env
+                sample = int(val * 32767.0)
+                frames.append(struct.pack('<h', max(-32768, min(32767, sample))))
+
+        with wave.open(str(path), 'w') as wf:
+            wf.setnchannels(1)
+            wf.setsampwidth(2)
+            wf.setframerate(sample_rate)
+            wf.writeframes(b''.join(frames))
+
+    def _ensure_chimes(self):
+        # 1. Happy Chime (Arpeggio C5 -> E5 -> G5 -> C6)
+        p_happy = self.CACHE_DIR / "happy.wav"
+        if not p_happy.exists():
+            self._generate_wav(p_happy, [523.25, 659.25, 783.99, 1046.50], 0.08, 3.0, 0.45)
+
+        # 2. Level-Up Fanfare (C5 -> E5 -> G5 -> B5 -> C6 -> E6)
+        p_lvl = self.CACHE_DIR / "level_up.wav"
+        if not p_lvl.exists():
+            self._generate_wav(p_lvl, [523.25, 659.25, 783.99, 987.77, 1046.50, 1318.51], 0.09, 2.0, 0.55)
+
+        # 3. Alert / Notstand Chime (A5 -> E6)
+        p_alert = self.CACHE_DIR / "alert.wav"
+        if not p_alert.exists():
+            self._generate_wav(p_alert, [880.0, 1318.51, 880.0, 1318.51], 0.10, 2.5, 0.45)
+
+        # 4. Ball Catch / Pop Chime (F4 -> C5 -> G5)
+        p_ball = self.CACHE_DIR / "ball_catch.wav"
+        if not p_ball.exists():
+            self._generate_wav(p_ball, [349.23, 523.25, 783.99], 0.07, 4.0, 0.5)
+
+        # 5. Sleep / Lullaby Chime (G5 -> E5 -> C5)
+        p_sleep = self.CACHE_DIR / "sleep.wav"
+        if not p_sleep.exists():
+            self._generate_wav(p_sleep, [783.99, 659.25, 523.25], 0.16, 1.8, 0.35)
+
+        # 6. Pomodoro Gong (G4 -> C5)
+        p_pomo = self.CACHE_DIR / "pomodoro.wav"
+        if not p_pomo.exists():
+            self._generate_wav(p_pomo, [392.0, 523.25], 0.30, 1.5, 0.5)
+
+    def play(self, sfx_name: str, volume: float = 0.8):
+        wav_path = self.CACHE_DIR / f"{sfx_name}.wav"
+        if wav_path.exists():
+            threading.Thread(
+                target=lambda: subprocess.run(["pw-play", "--volume", str(volume), str(wav_path)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL),
+                daemon=True
+            ).start()
+
+
+# ==============================================================================
+# 2. SCHWEBENDE PARTIKEL-ENGINE (HEARTS, STARS, ICONS, ZZZ)
+# ==============================================================================
+class Particle:
+    def __init__(self, x: float, y: float, text: str, color: QColor, vx: float = 0.0, vy: float = -1.2, max_life: float = 2.0):
+        self.x = x
+        self.y = y
+        self.text = text
+        self.color = color
+        self.vx = vx
+        self.vy = vy
+        self.birth = time.time()
+        self.max_life = max_life
+
+    def update(self) -> bool:
+        self.x += self.vx
+        self.y += self.vy
+        return (time.time() - self.birth) < self.max_life
+
+    def alpha(self) -> float:
+        age = time.time() - self.birth
+        return max(0.0, 1.0 - (age / self.max_life))
+
+
+# ==============================================================================
+# 3. INTERAKTIVES BALL-FANGSPIEL (FETCH GAME)
+# ==============================================================================
+class BallGame:
+    def __init__(self):
+        self.active = False
+        self.x = 0.0
+        self.y = 0.0
+        self.vx = 0.0
+        self.vy = 0.0
+        self.target_caught = False
+
+    def throw(self, start_x: float, start_y: float, target_x: float):
+        self.active = True
+        self.target_caught = False
+        self.x = start_x
+        self.y = start_y
+        self.vx = (target_x - start_x) * 0.04
+        self.vy = -7.5  # Bogenwurf
+
+    def update_physics(self, ground_y: float):
+        if not self.active:
+            return
+
+        self.vy += 0.45  # Gravitation
+        self.x += self.vx
+        self.y += self.vy
+
+        if self.y >= ground_y:
+            self.y = ground_y
+            self.vy = -self.vy * 0.65  # Abprallen
+            self.vx *= 0.85  # Reibung
+            if abs(self.vy) < 1.0:
+                self.vy = 0.0
+
+
+# ==============================================================================
+# 4. POMODORO FOKUS-TRAINER
+# ==============================================================================
+class PomodoroManager(QObject):
+    tick = pyqtSignal(str, int)  # mode, seconds_left
+    finished = pyqtSignal(str)   # mode
+
+    def __init__(self):
+        super().__init__()
+        self.mode = "OFF"  # OFF, FOCUS, BREAK
+        self.seconds_left = 0
+        self.total_focus_minutes = 25
+        self.total_break_minutes = 5
+
+        self.timer = QTimer(self)
+        self.timer.timeout.connect(self._on_tick)
+
+    def start_focus(self, minutes: int = 25):
+        self.mode = "FOCUS"
+        self.total_focus_minutes = minutes
+        self.seconds_left = minutes * 60
+        self.timer.start(1000)
+
+    def start_break(self, minutes: int = 5):
+        self.mode = "BREAK"
+        self.total_break_minutes = minutes
+        self.seconds_left = minutes * 60
+        self.timer.start(1000)
+
+    def stop(self):
+        self.mode = "OFF"
+        self.timer.stop()
+
+    def _on_tick(self):
+        if self.mode == "OFF":
+            return
+
+        self.seconds_left -= 1
+        self.tick.emit(self.mode, self.seconds_left)
+
+        if self.seconds_left <= 0:
+            completed_mode = self.mode
+            if completed_mode == "FOCUS":
+                self.start_break(self.total_break_minutes)
+            else:
+                self.stop()
+            self.finished.emit(completed_mode)
+
+
+# ==============================================================================
+# 5. KONFIGURATIONS-MANAGER
 # ==============================================================================
 class ConfigManager:
     """Verwaltet dauerhafte Einstellungen in ~/.config/desktop_pet/config.json"""
@@ -158,26 +399,38 @@ class ConfigManager:
 
     DEFAULT_CONFIG = {
         "api_key": "",
-        "llm_provider": "auto",  # auto, gemini, openai, openrouter, groq, ollama, custom
+        "llm_provider": "auto",
         "model_name": "gemini-1.5-flash",
         "base_url": "",
         "voice": "lola",
         "volume": 85,
         "muted": False,
         "scale": 0.70,
+        "hud_theme": "cyberpunk",
         "roaming_enabled": True,
         "show_tamagotchi_hud": True,
-        "nag_intensity": "frech",  # sanft, frech, extrem
+        "nag_intensity": "frech",
         "decay_minutes": {
-            "hunger": 120,   # Alle 2 Stunden Hunger
-            "thirst": 45,    # Alle 45 Minuten Durst
-            "energy": 50     # Alle 50 Minuten Pause nötig
+            "hunger": 120,
+            "thirst": 45,
+            "energy": 50
         },
         "vitals": {
             "hunger": 85.0,
             "thirst": 90.0,
             "energy": 95.0,
             "last_tick": time.time()
+        },
+        "progression": {
+            "xp": 35,
+            "level": 1,
+            "affection": 50,
+            "water_drank_today": 2,
+            "meals_eaten_today": 1,
+            "breaks_taken_today": 1,
+            "pomodoros_done_today": 0,
+            "streak_days": 1,
+            "last_active_date": datetime.now().strftime("%Y-%m-%d")
         },
         "appointments": [],
         "pos_x": -1,
@@ -188,6 +441,7 @@ class ConfigManager:
         self.CONFIG_DIR.mkdir(parents=True, exist_ok=True)
         self.data = dict(self.DEFAULT_CONFIG)
         self.load()
+        self._check_midnight_reset()
 
     def load(self):
         if self.CONFIG_FILE.exists():
@@ -205,6 +459,26 @@ class ConfigManager:
         except Exception as e:
             print(f"[Config] Fehler beim Speichern: {e}")
 
+    def _check_midnight_reset(self):
+        prog = self.data.setdefault("progression", dict(self.DEFAULT_CONFIG["progression"]))
+        last_date = prog.get("last_active_date", "")
+        today = datetime.now().strftime("%Y-%m-%d")
+
+        if last_date != today:
+            # Tageszähler zurücksetzen, Streak erhöhen
+            yesterday = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
+            if last_date == yesterday:
+                prog["streak_days"] = prog.get("streak_days", 1) + 1
+            else:
+                prog["streak_days"] = 1
+
+            prog["water_drank_today"] = 0
+            prog["meals_eaten_today"] = 0
+            prog["breaks_taken_today"] = 0
+            prog["pomodoros_done_today"] = 0
+            prog["last_active_date"] = today
+            self.save()
+
     def get(self, key, default=None):
         return self.data.get(key, default)
 
@@ -212,9 +486,37 @@ class ConfigManager:
         self.data[key] = value
         self.save()
 
+    def add_xp(self, amount: int) -> bool:
+        prog = self.data.setdefault("progression", dict(self.DEFAULT_CONFIG["progression"]))
+        prog["xp"] = prog.get("xp", 0) + amount
+
+        old_lvl = prog.get("level", 1)
+        new_lvl = 1
+        for threshold, title in LEVEL_TITLES:
+            if prog["xp"] >= threshold:
+                new_lvl += 1
+            else:
+                break
+        new_lvl = max(1, new_lvl - 1)
+
+        level_up = (new_lvl > old_lvl)
+        prog["level"] = new_lvl
+        self.save()
+        return level_up
+
+    def get_level_info(self) -> tuple:
+        prog = self.data.get("progression", {})
+        xp = prog.get("xp", 0)
+        lvl = prog.get("level", 1)
+        title = "Neuling"
+        for t, tit in LEVEL_TITLES:
+            if xp >= t:
+                title = tit
+        return lvl, title, xp
+
 
 # ==============================================================================
-# 2. AUDIO & SPRACHAUSGABE (VOICE ENGINE)
+# 6. AUDIO & SPRACHAUSGABE (VOICE ENGINE)
 # ==============================================================================
 class VoiceEngine(QObject):
     """Handhabt Sprachausgabe für 4 Stimmen mit Neural-TTS / Fallback und Audio-Rhythmus"""
@@ -223,9 +525,10 @@ class VoiceEngine(QObject):
     speech_finished = pyqtSignal()
     audio_level = pyqtSignal(float)
 
-    def __init__(self, config: ConfigManager):
+    def __init__(self, config: ConfigManager, sfx: RetroSoundSynthesizer):
         super().__init__()
         self.config = config
+        self.sfx = sfx
         self._is_speaking = False
         self._stop_requested = False
 
@@ -240,7 +543,6 @@ class VoiceEngine(QObject):
             pass
 
     def speak(self, text: str, voice_override: Optional[str] = None):
-        """Spricht Text asynchron ab"""
         if self.config.get("muted", False) or not text.strip():
             return
 
@@ -263,7 +565,7 @@ class VoiceEngine(QObject):
 
         played_successfully = False
 
-        # 1. Methode: Google TTS + FFmpeg Pitch Modulation für 4 distinkte Stimmen
+        # 1. Methode: Google TTS + FFmpeg Pitch Shifting für 4 distinkte Stimmen
         try:
             url = "https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&tl=de&q=" + urllib.parse.quote(text[:300])
             req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 (X11; Linux x86_64)"})
@@ -276,7 +578,6 @@ class VoiceEngine(QObject):
             pitch = voice_info.get("pitch", 1.0)
             rate = voice_info.get("rate", 1.0)
 
-            # FFmpeg Filter: Pitch Shifting via asetrate & atempo
             sample_rate = int(24000 * pitch)
             tempo_correct = 1.0 / pitch * rate
             filter_str = f"asetrate={sample_rate},atempo={tempo_correct:.3f}"
@@ -290,21 +591,19 @@ class VoiceEngine(QObject):
 
             play_file = tmp_mod if res.returncode == 0 and tmp_mod.exists() else tmp_raw
 
-            # Audio-Rhythmus Simulation während der Wiedergabe
             vol = self.config.get("volume", 85) / 100.0
             play_proc = subprocess.Popen(["pw-play", "--volume", str(vol), str(play_file)])
 
             while play_proc.poll() is None and not self._stop_requested:
-                lvl = random.uniform(0.2, 0.95)
+                lvl = random.uniform(0.25, 0.95)
                 self.audio_level.emit(lvl)
                 time.sleep(0.08)
 
             played_successfully = True
-        except Exception as e:
-            # Fallback bei Offline / Netzwerkproblem: espeak-ng
+        except Exception:
             pass
 
-        # 2. Methode: Offline espeak-ng / espeak Fallback
+        # 2. Methode: Offline espeak-ng Fallback
         if not played_successfully and not self._stop_requested:
             try:
                 esp_voice = voice_info.get("espeak", "de+f2")
@@ -318,7 +617,6 @@ class VoiceEngine(QObject):
                 except Exception:
                     pass
 
-        # Aufräumen
         self.audio_level.emit(0.0)
         self._is_speaking = False
         self.speech_finished.emit()
@@ -332,10 +630,10 @@ class VoiceEngine(QObject):
 
 
 # ==============================================================================
-# 3. LLM ENGINE (EGAL WELCHES LLM ÜBER API-KEY KONFIGURIERBAR)
+# 7. LLM ENGINE (EGAL WELCHES LLM ÜBER API-KEY)
 # ==============================================================================
 class LLMEngine:
-    """Universelle LLM-Schnittstelle für Gemini, OpenAI, Groq, OpenRouter & Ollama"""
+    """Universelle Schnittstelle für Gemini, OpenAI, Groq, OpenRouter & Ollama"""
 
     def __init__(self, config: ConfigManager):
         self.config = config
@@ -353,7 +651,6 @@ class LLMEngine:
         return "custom"
 
     def generate_nag(self, vital_type: str, context_info: str = "") -> str:
-        """Erzeugt frechen Nervensägen-Spruch via konfiguriertem LLM oder Offline-Fallback"""
         api_key = self.config.get("api_key", "").strip()
         provider = self.config.get("llm_provider", "auto")
 
@@ -399,10 +696,7 @@ class LLMEngine:
             "contents": [
                 {"role": "user", "parts": [{"text": f"System-Anweisung: {sys_prompt}\n\nAufgabe: {user_prompt}"}]}
             ],
-            "generationConfig": {
-                "maxOutputTokens": 80,
-                "temperature": 0.8
-            }
+            "generationConfig": {"maxOutputTokens": 80, "temperature": 0.8}
         }
         data = json.dumps(payload).encode("utf-8")
         req = urllib.request.Request(url, data=data, headers={"Content-Type": "application/json"})
@@ -455,35 +749,35 @@ class LLMEngine:
                 msg = choices[0].get("message", {}).get("content", "")
                 if msg.strip():
                     return msg.strip()
-        raise ValueError("Leere OpenAI-kompatible Antwort")
+        raise ValueError("Leere Antwort")
 
 
 # ==============================================================================
-# 4. TAMAGOTCHI ENGINE (BEDÜRFNISSE, INTERVALLE & NERVENSÄGE)
+# 8. TAMAGOTCHI ENGINE (BEDÜRFNISSE, NERVENSÄGE, SNACKS & PROGRESSION)
 # ==============================================================================
 class TamagotchiEngine(QObject):
-    """Simuliert Bedürfnisse (Hunger, Durst, Energie/Pause) und Terminerinnerungen"""
+    """Simuliert Bedürfnisse, Termine, XP und Schlafrhythmus"""
 
     vitals_updated = pyqtSignal(dict)
-    nag_triggered = pyqtSignal(str, str)  # vital_type, text
-    appointment_alert = pyqtSignal(dict)  # appointment dict
+    nag_triggered = pyqtSignal(str, str)
+    level_up = pyqtSignal(int, str)
 
-    def __init__(self, config: ConfigManager, llm: LLMEngine, voice: VoiceEngine):
+    def __init__(self, config: ConfigManager, llm: LLMEngine, voice: VoiceEngine, sfx: RetroSoundSynthesizer):
         super().__init__()
         self.config = config
         self.llm = llm
         self.voice = voice
+        self.sfx = sfx
 
-        # Vitals initialisieren
         vitals = self.config.get("vitals", {})
         self.hunger = float(vitals.get("hunger", 85.0))
         self.thirst = float(vitals.get("thirst", 90.0))
         self.energy = float(vitals.get("energy", 95.0))
         self.last_tick = vitals.get("last_tick", time.time())
 
-        # Nag-Timer & Cooldowns
+        self.is_sleeping = False
         self.last_nag_time = 0.0
-        self.nag_cooldown = 180.0  # Alle 3 Minuten nerven bei kritischem Zustand
+        self.nag_cooldown = 180.0
 
         self.timer = QTimer(self)
         self.timer.timeout.connect(self._tick)
@@ -499,12 +793,14 @@ class TamagotchiEngine(QObject):
         t_min = max(5, decay.get("thirst", 45))
         e_min = max(5, decay.get("energy", 50))
 
-        # Zerfall pro Sekunde berechnen
-        self.hunger = max(0.0, self.hunger - (100.0 / (h_min * 60.0)) * elapsed)
-        self.thirst = max(0.0, self.thirst - (100.0 / (t_min * 60.0)) * elapsed)
-        self.energy = max(0.0, self.energy - (100.0 / (e_min * 60.0)) * elapsed)
+        if not self.is_sleeping:
+            self.hunger = max(0.0, self.hunger - (100.0 / (h_min * 60.0)) * elapsed)
+            self.thirst = max(0.0, self.thirst - (100.0 / (t_min * 60.0)) * elapsed)
+            self.energy = max(0.0, self.energy - (100.0 / (e_min * 60.0)) * elapsed)
+        else:
+            # Im Schlaf regeneriert sich die Energie langsam!
+            self.energy = min(100.0, self.energy + (100.0 / 1800.0) * elapsed)
 
-        # In Config speichern
         self.config.data["vitals"] = {
             "hunger": round(self.hunger, 1),
             "thirst": round(self.thirst, 1),
@@ -518,26 +814,22 @@ class TamagotchiEngine(QObject):
             "energy": self.energy
         })
 
-        # Prüfe Termine
-        self._check_appointments()
+        if not self.is_sleeping:
+            self._check_appointments()
 
-        # Prüfe ob Pet als Nervensäge aktiv werden muss
-        if now - self.last_nag_time > self.nag_cooldown:
-            critical_vital = None
-            if self.thirst < 25.0:
-                critical_vital = "thirst"
-            elif self.energy < 25.0:
-                critical_vital = "energy"
-            elif self.hunger < 25.0:
-                critical_vital = "hunger"
+            if now - self.last_nag_time > self.nag_cooldown:
+                critical = None
+                if self.thirst < 25.0:
+                    critical = "thirst"
+                elif self.energy < 25.0:
+                    critical = "energy"
+                elif self.hunger < 25.0:
+                    critical = "hunger"
 
-            if critical_vital:
-                self.last_nag_time = now
-                threading.Thread(
-                    target=self._trigger_nag_async,
-                    args=(critical_vital,),
-                    daemon=True
-                ).start()
+                if critical:
+                    self.last_nag_time = now
+                    self.sfx.play("alert")
+                    threading.Thread(target=self._trigger_nag_async, args=(critical,), daemon=True).start()
 
     def _trigger_nag_async(self, vital_type: str):
         val = int(getattr(self, vital_type, 0))
@@ -547,48 +839,96 @@ class TamagotchiEngine(QObject):
 
     def _check_appointments(self):
         appointments = self.config.get("appointments", [])
-        now_dt = datetime.now()
-        now_str = now_dt.strftime("%H:%M")
-        today_str = now_dt.strftime("%Y-%m-%d")
+        now_str = datetime.now().strftime("%H:%M")
+        today_str = datetime.now().strftime("%Y-%m-%d")
 
         for app in appointments:
             if app.get("date") == today_str and not app.get("reminded", False):
-                app_time = app.get("time", "")
-                if app_time == now_str:
+                if app.get("time", "") == now_str:
                     app["reminded"] = True
                     self.config.save()
                     title = app.get("title", "Termin")
                     msg = self.llm.generate_nag("appointment", title)
-                    self.appointment_alert.emit(app)
+                    self.sfx.play("alert")
                     self.nag_triggered.emit("appointment", msg)
                     self.voice.speak(msg)
                     break
 
-    def feed(self):
-        self.hunger = min(100.0, self.hunger + 50.0)
-        self.config.save()
-        self.voice.speak("Mmh, köstlich! Danke für den Snack! Jetzt habe ich wieder Energie! 💖")
+    def feed_snack(self, snack_type: str) -> tuple:
+        """Gibt Snack, erneuert Vitals, gibt XP und spielt Sound"""
+        prog = self.config.data.setdefault("progression", {})
 
-    def drink(self):
-        self.thirst = min(100.0, self.thirst + 50.0)
+        if snack_type == "sandwich":
+            self.hunger = min(100.0, self.hunger + 50.0)
+            prog["meals_eaten_today"] = prog.get("meals_eaten_today", 0) + 1
+            msg = "Mmh, Sandwich verputzt! Großartig!"
+            icon = "🥪"
+            xp = 20
+        elif snack_type == "apple":
+            self.hunger = min(100.0, self.hunger + 25.0)
+            self.energy = min(100.0, self.energy + 10.0)
+            msg = "Knackiger Apfel! Vitamine für uns beide!"
+            icon = "🍎"
+            xp = 15
+        elif snack_type == "coffee":
+            self.energy = min(100.0, self.energy + 40.0)
+            msg = "Kaffee-Boost aktiviert! Koffein im System!"
+            icon = "☕"
+            xp = 15
+        elif snack_type == "water":
+            self.thirst = min(100.0, self.thirst + 50.0)
+            prog["water_drank_today"] = prog.get("water_drank_today", 0) + 1
+            msg = "Aah, frisches Wasser! Hydration perfekt!"
+            icon = "🥤"
+            xp = 25
+        elif snack_type == "donut":
+            self.hunger = min(100.0, self.hunger + 30.0)
+            prog["affection"] = min(100, prog.get("affection", 50) + 10)
+            msg = "Ein Donut! Du bist ja so lieb zu mir! 💖"
+            icon = "🍩"
+            xp = 20
+        else:
+            return "Danke!", "✨"
+
+        self.sfx.play("happy")
+        is_lvl_up = self.config.add_xp(xp)
         self.config.save()
-        self.voice.speak("Aaaah, herrlich erfrischend! Hydration wieder im grünen Bereich! 💧")
+
+        if is_lvl_up:
+            lvl, tit, _ = self.config.get_level_info()
+            self.sfx.play("level_up")
+            self.level_up.emit(lvl, tit)
+            self.voice.speak(f"Juhu! Wir haben Level {lvl} erreicht! Wir sind jetzt {tit}!")
+
+        return msg, icon
 
     def take_break(self):
         self.energy = 100.0
+        prog = self.config.data.setdefault("progression", {})
+        prog["breaks_taken_today"] = prog.get("breaks_taken_today", 0) + 1
+        is_lvl = self.config.add_xp(35)
+        self.sfx.play("happy")
         self.config.save()
-        self.voice.speak("Super gemacht! Kurz gestreckt und tief durchgeatmet – jetzt geht's produktiv weiter! ✨")
+        if is_lvl:
+            lvl, tit, _ = self.config.get_level_info()
+            self.level_up.emit(lvl, tit)
+        self.voice.speak("Super durchgeatmet und gestreckt! Das tat gut! ✨")
+
+    def toggle_sleep(self) -> bool:
+        self.is_sleeping = not self.is_sleeping
+        if self.is_sleeping:
+            self.sfx.play("sleep")
+            self.voice.stop()
+        else:
+            self.sfx.play("happy")
+            self.voice.speak("Guten Morgen! Ausgeruht und voller Tatendrang! ☀️")
+        return self.is_sleeping
 
     def get_next_appointment(self) -> Optional[Dict[str, Any]]:
         appointments = self.config.get("appointments", [])
         today_str = datetime.now().strftime("%Y-%m-%d")
         now_time = datetime.now().strftime("%H:%M")
-
-        upcoming = []
-        for a in appointments:
-            if a.get("date") == today_str and a.get("time", "") >= now_time and not a.get("reminded", False):
-                upcoming.append(a)
-
+        upcoming = [a for a in appointments if a.get("date") == today_str and a.get("time", "") >= now_time and not a.get("reminded", False)]
         if upcoming:
             upcoming.sort(key=lambda x: x.get("time", ""))
             return upcoming[0]
@@ -596,41 +936,43 @@ class TamagotchiEngine(QObject):
 
 
 # ==============================================================================
-# 5. EINSTELLUNGS- & KONFIGURATIONS-FENSTER (PYQT6)
+# 9. EINSTELLUNGS- & HEALTH-DASHBOARD FENSTER
 # ==============================================================================
 class SettingsDialog(QDialog):
-    """Modernes Cyberpunk/Dark Einstellungsmenü für KI-API-Key, Stimmen & Tamagotchi"""
+    """Modernes Cyberpunk/Dark Einstellungsmenü mit Health-Dashboard & Themes"""
 
-    def __init__(self, config: ConfigManager, voice: VoiceEngine, llm: LLMEngine, parent=None):
+    def __init__(self, config: ConfigManager, voice: VoiceEngine, llm: LLMEngine, tamagotchi: TamagotchiEngine, parent=None):
         super().__init__(parent)
         self.config = config
         self.voice = voice
         self.llm = llm
+        self.tamagotchi = tamagotchi
 
-        self.setWindowTitle("🐾 Yuyu Desktop Pet — Einstellungen & Konfiguration")
-        self.setMinimumSize(640, 520)
+        self.setWindowTitle("🐾 Yuyu Desktop Pet — Einstellungen & Dashboard")
+        self.setMinimumSize(680, 560)
         self.setStyleSheet("""
             QDialog {
-                background-color: #0f131a;
+                background-color: #0d121c;
                 color: #e2e8f0;
                 font-family: sans-serif;
             }
             QTabWidget::pane {
                 border: 1px solid #1e293b;
-                background-color: #090d14;
+                background-color: #070a10;
                 border-radius: 8px;
             }
             QTabBar::tab {
                 background: #111827;
                 color: #94a3b8;
-                padding: 8px 16px;
+                padding: 9px 18px;
                 border-top-left-radius: 6px;
                 border-top-right-radius: 6px;
-                margin-right: 2px;
+                margin-right: 3px;
+                font-size: 11px;
             }
             QTabBar::tab:selected {
                 background: #00d4ff;
-                color: #050b14;
+                color: #040810;
                 font-weight: bold;
             }
             QGroupBox {
@@ -660,7 +1002,7 @@ class SettingsDialog(QDialog):
             }
             QPushButton:hover {
                 background-color: #00d4ff;
-                color: #050b14;
+                color: #040810;
             }
             QTableWidget {
                 background-color: #111827;
@@ -671,9 +1013,21 @@ class SettingsDialog(QDialog):
             QHeaderView::section {
                 background-color: #1e293b;
                 color: #00d4ff;
-                padding: 4px;
+                padding: 5px;
                 font-weight: bold;
                 border: none;
+            }
+            QProgressBar {
+                border: 1px solid #1e293b;
+                border-radius: 6px;
+                text-align: center;
+                background: #0f172a;
+                color: white;
+                font-weight: bold;
+            }
+            QProgressBar::chunk {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #0284c7, stop:1 #00d4ff);
+                border-radius: 5px;
             }
         """)
 
@@ -681,10 +1035,12 @@ class SettingsDialog(QDialog):
         self.tabs = QTabWidget()
         layout.addWidget(self.tabs)
 
+        self._build_tab_dashboard()
         self._build_tab_llm()
         self._build_tab_voices()
         self._build_tab_tamagotchi()
         self._build_tab_appointments()
+        self._build_tab_pomodoro()
 
         # Footer Buttons
         btn_box = QHBoxLayout()
@@ -699,6 +1055,64 @@ class SettingsDialog(QDialog):
         btn_box.addWidget(self.btn_close)
 
         layout.addLayout(btn_box)
+
+    def _build_tab_dashboard(self):
+        tab = QWidget()
+        l = QVBoxLayout(tab)
+
+        lvl, title, xp = self.config.get_level_info()
+
+        # RPG Level Box
+        box_rpg = QGroupBox("⭐ Dein Tamagotchi Partner & Freundschafts-Level")
+        br_l = QVBoxLayout(box_rpg)
+
+        h_top = QHBoxLayout()
+        lbl_avatar = QLabel("🐾")
+        lbl_avatar.setStyleSheet("font-size: 38px; padding: 5px;")
+        h_top.addWidget(lbl_avatar)
+
+        v_meta = QVBoxLayout()
+        v_meta.addWidget(QLabel(f"<b style='font-size:16px; color:#00d4ff;'>Level {lvl} — {title}</b>"))
+        v_meta.addWidget(QLabel(f"<span style='color:#94a3b8;'>Gesamt Erfahrungspunkte: {xp} XP</span>"))
+        h_top.addLayout(v_meta)
+        h_top.addStretch()
+        br_l.addLayout(h_top)
+
+        # XP Fortschrittsbalken
+        bar_xp = QProgressBar()
+        bar_xp.setRange(0, 1000)
+        bar_xp.setValue(min(1000, xp))
+        bar_xp.setFormat(f"{xp} / 1000 XP bis Meisterschaft")
+        br_l.addWidget(bar_xp)
+
+        l.addWidget(box_rpg)
+
+        # Tages-Gesundheits-Tracker
+        box_health = QGroupBox("📊 Heutiger Gesundheits-Tracker (Tages-Statistiken)")
+        bh_l = QVBoxLayout(box_health)
+
+        prog = self.config.data.get("progression", {})
+        stats = [
+            ("🥤 Getrunkene Gläser Wasser:", f"{prog.get('water_drank_today', 0)} Gläser", "Empfohlen: 6-8 Gläser"),
+            ("🥪 Zu sich genommene Mahlzeiten/Snacks:", f"{prog.get('meals_eaten_today', 0)} Mahlzeiten", "Regelmäßig essen"),
+            ("🧘 Absolvierte Bildschirmpausen:", f"{prog.get('breaks_taken_today', 0)} Pausen", "Empfohlen: alle 45-60 Min"),
+            ("🍅 Abgeschlossene Pomodoro-Phasen:", f"{prog.get('pomodoros_done_today', 0)} Sessions", "Fokussierte Arbeit"),
+            ("🔥 Aktuelle Tages-Streak:", f"{prog.get('streak_days', 1)} Tage in Folge", "Bleib dran!")
+        ]
+
+        for title_str, val_str, sub in stats:
+            h = QHBoxLayout()
+            h.addWidget(QLabel(f"<b>{title_str}</b>"))
+            lbl_v = QLabel(f"<span style='color:#00d4ff; font-weight:bold;'>{val_str}</span>")
+            h.addWidget(lbl_v)
+            h.addStretch()
+            h.addWidget(QLabel(f"<span style='color:#64748b; font-size:10px;'>{sub}</span>"))
+            bh_l.addLayout(h)
+
+        l.addWidget(box_health)
+        l.addStretch()
+
+        self.tabs.addTab(tab, "📊 Dashboard & Level")
 
     def _build_tab_llm(self):
         tab = QWidget()
@@ -805,7 +1219,6 @@ class SettingsDialog(QDialog):
 
         l.addWidget(box)
 
-        # Audio Einstellungen
         box_audio = QGroupBox("🔊 Lautstärke & Audio")
         ba_l = QVBoxLayout(box_audio)
 
@@ -867,7 +1280,7 @@ class SettingsDialog(QDialog):
 
         l.addWidget(box_decay)
 
-        box_nag = QGroupBox("😼 Die kleine Nervensäge")
+        box_nag = QGroupBox("😼 Die kleine Nervensäge & HUD Styling")
         bn_l = QVBoxLayout(box_nag)
 
         h_int = QHBoxLayout()
@@ -880,6 +1293,17 @@ class SettingsDialog(QDialog):
         h_int.addWidget(self.combo_intensity)
         bn_l.addLayout(h_int)
 
+        h_thm = QHBoxLayout()
+        h_thm.addWidget(QLabel("HUD Design / Theme:"))
+        self.combo_theme = QComboBox()
+        for tk, tv in HUD_THEMES.items():
+            self.combo_theme.addItem(tv["name"], tk)
+        cur_thm = self.config.get("hud_theme", "cyberpunk")
+        idx_t = list(HUD_THEMES.keys()).index(cur_thm) if cur_thm in HUD_THEMES else 0
+        self.combo_theme.setCurrentIndex(idx_t)
+        h_thm.addWidget(self.combo_theme)
+        bn_l.addLayout(h_thm)
+
         self.chk_hud = QCheckBox("Tamagotchi-Statusleiste (🥪 💧 ⚡) über dem Pet anzeigen")
         self.chk_hud.setChecked(self.config.get("show_tamagotchi_hud", True))
         bn_l.addWidget(self.chk_hud)
@@ -891,7 +1315,7 @@ class SettingsDialog(QDialog):
         l.addWidget(box_nag)
         l.addStretch()
 
-        self.tabs.addTab(tab, "🐾 Tamagotchi & Nervensäge")
+        self.tabs.addTab(tab, "🐾 Tamagotchi & Themes")
 
     def _build_tab_appointments(self):
         tab = QWidget()
@@ -924,15 +1348,50 @@ class SettingsDialog(QDialog):
 
         l.addWidget(box_add)
 
-        # Tabelle
         self.table_apps = QTableWidget(0, 4)
         self.table_apps.setHorizontalHeaderLabels(["Datum", "Uhrzeit", "Termin", "Aktion"])
         self.table_apps.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
         l.addWidget(self.table_apps)
 
         self._refresh_appointments_table()
-
         self.tabs.addTab(tab, "📅 Termine")
+
+    def _build_tab_pomodoro(self):
+        tab = QWidget()
+        l = QVBoxLayout(tab)
+
+        box = QGroupBox("🍅 Pomodoro Fokus-Trainer")
+        b_l = QVBoxLayout(box)
+
+        b_l.addWidget(QLabel("Strukturiertes Arbeiten mit 25 Minuten Fokus und 5 Minuten Pause:"))
+
+        h1 = QHBoxLayout()
+        h1.addWidget(QLabel("Fokus-Dauer (Minuten):"))
+        self.spn_pomo_focus = QSpinBox()
+        self.spn_pomo_focus.setRange(5, 60)
+        self.spn_pomo_focus.setValue(25)
+        h1.addWidget(self.spn_pomo_focus)
+        b_l.addLayout(h1)
+
+        h2 = QHBoxLayout()
+        h2.addWidget(QLabel("Pausen-Dauer (Minuten):"))
+        self.spn_pomo_break = QSpinBox()
+        self.spn_pomo_break.setRange(2, 30)
+        self.spn_pomo_break.setValue(5)
+        h2.addWidget(self.spn_pomo_break)
+        b_l.addLayout(h2)
+
+        info = QLabel(
+            "💡 Du kannst den Pomodoro-Timer jederzeit mit Rechtsklick auf das Pet starten!\n"
+            "Das Pet unterstützt dich während der Arbeitsphase und erinnert dich pünktlich an die Pause."
+        )
+        info.setStyleSheet("color: #94a3b8; font-size: 11px;")
+        b_l.addWidget(info)
+
+        l.addWidget(box)
+        l.addStretch()
+
+        self.tabs.addTab(tab, "🍅 Pomodoro")
 
     def _refresh_appointments_table(self):
         apps = self.config.get("appointments", [])
@@ -950,7 +1409,7 @@ class SettingsDialog(QDialog):
     def _add_appointment(self):
         title = self.txt_app_title.text().strip()
         if not title:
-            QMessageBox.warning(self, "Fehler", "Bitte einen Titel für den Termin eingeben!")
+            QMessageBox.warning(self, "Fehler", "Bitte einen Titel eingeben!")
             return
         d_str = self.date_app.date().toString("yyyy-MM-dd")
         t_str = self.time_app.time().toString("HH:mm")
@@ -1014,7 +1473,6 @@ class SettingsDialog(QDialog):
         self.lbl_llm_status.setStyleSheet("color: #eab308; font-weight: bold;")
         QApplication.processEvents()
 
-        # Temporär Werte anwenden
         self.config.data["api_key"] = key
         self.config.data["model_name"] = self.txt_model.text().strip() or "gemini-1.5-flash"
         self.config.data["base_url"] = self.txt_base_url.text().strip()
@@ -1044,6 +1502,7 @@ class SettingsDialog(QDialog):
         self.config.data["muted"] = self.chk_mute.isChecked()
         self.config.data["show_tamagotchi_hud"] = self.chk_hud.isChecked()
         self.config.data["roaming_enabled"] = self.chk_roam.isChecked()
+        self.config.data["hud_theme"] = self.combo_theme.currentData()
 
         idx = self.combo_intensity.currentIndex()
         self.config.data["nag_intensity"] = "sanft" if idx == 0 else ("extrem" if idx == 2 else "frech")
@@ -1059,17 +1518,18 @@ class SettingsDialog(QDialog):
 
 
 # ==============================================================================
-# 6. HAUPTFENSTER: DESKTOP PET & TAMAGOTCHI OVERLAY
+# 10. HAUPTFENSTER: DESKTOP PET & TAMAGOTCHI OVERLAY
 # ==============================================================================
 class DesktopPetWindow(QWidget):
-    """Natives PyQt6 Desktop-Overlay mit Anti-Aliasing, Tamagotchi-HUD & Spritesheet"""
+    """Natives PyQt6 Desktop-Overlay mit Anti-Aliasing, Ball-Spiel, Pomodoro & Themes"""
 
-    def __init__(self, config: ConfigManager, voice: VoiceEngine, llm: LLMEngine, tamagotchi: TamagotchiEngine):
+    def __init__(self, config: ConfigManager, voice: VoiceEngine, llm: LLMEngine, tamagotchi: TamagotchiEngine, sfx: RetroSoundSynthesizer):
         super().__init__()
         self.config = config
         self.voice = voice
         self.llm = llm
         self.tamagotchi = tamagotchi
+        self.sfx = sfx
 
         # Fenster-Flags: Transparent, rahmenlos, immer im Vordergrund
         self.setWindowFlags(
@@ -1086,7 +1546,7 @@ class DesktopPetWindow(QWidget):
 
         # Skalierung & Rendering
         self.scale = float(self.config.get("scale", 0.70))
-        self.hud_height = 55  # Platz für Tamagotchi-HUD über dem Pet
+        self.hud_height = 58
         self._update_window_size()
 
         # Animation State
@@ -1106,6 +1566,11 @@ class DesktopPetWindow(QWidget):
         self.drag_start_pos = QPoint()
         self.drag_moved_threshold = False
 
+        # Partikel & Spiele
+        self.particles: List[Particle] = []
+        self.ball_game = BallGame()
+        self.pomodoro = PomodoroManager()
+
         # Sprechblase & Audio Bounce
         self.speech_bubble_text = ""
         self.speech_bubble_timeout = 0.0
@@ -1116,8 +1581,11 @@ class DesktopPetWindow(QWidget):
         self.voice.audio_level.connect(self._on_audio_level)
         self.tamagotchi.nag_triggered.connect(self._on_nag_triggered)
         self.tamagotchi.vitals_updated.connect(lambda v: self.update())
+        self.tamagotchi.level_up.connect(self._on_level_up)
+        self.pomodoro.tick.connect(self._on_pomodoro_tick)
+        self.pomodoro.finished.connect(self._on_pomodoro_finished)
 
-        # Render-Timer (60 FPS)
+        # 60 FPS Game Loop Timer
         self.anim_timer = QTimer(self)
         self.anim_timer.timeout.connect(self._game_loop)
         self.anim_timer.start(16)
@@ -1136,11 +1604,9 @@ class DesktopPetWindow(QWidget):
         if chosen:
             self.spritesheet = QImage(str(chosen))
             print(f"[DesktopPet] Spritesheet geladen: {chosen} ({self.spritesheet.width()}x{self.spritesheet.height()})")
-        else:
-            print("[DesktopPet] WARNUNG: Spritesheet nicht gefunden!")
 
     def _update_window_size(self):
-        w = int(FRAME_WIDTH * self.scale) + 30
+        w = int(FRAME_WIDTH * self.scale) + 40
         h = int(FRAME_HEIGHT * self.scale) + self.hud_height + 40
         self.setFixedSize(w, h)
 
@@ -1157,11 +1623,55 @@ class DesktopPetWindow(QWidget):
                 y = geom.bottom() - self.height() - 10
                 self.move(x, y)
 
+    def add_particle(self, text: str, color: QColor, offset_x: float = 0.0, offset_y: float = 0.0):
+        cx = self.width() // 2 + offset_x
+        cy = self.hud_height + 25 + offset_y
+        vx = random.uniform(-0.6, 0.6)
+        vy = random.uniform(-1.8, -0.9)
+        self.particles.append(Particle(cx, cy, text, color, vx, vy, max_life=2.0))
+
     def _game_loop(self):
         now = time.time()
 
-        # 1. Gaze Tracking (Blickverfolgung zum Cursor)
-        if self.gaze_tracking_enabled and self.current_anim == "idle":
+        # 1. Partikel updaten
+        self.particles = [p for p in self.particles if p.update()]
+
+        # Zzz Partikel im Schlafmodus
+        if self.tamagotchi.is_sleeping and random.random() < 0.035:
+            self.add_particle("Zzz...", QColor(96, 165, 250), offset_x=random.uniform(-15, 15))
+
+        # 2. Ball-Fangspiel Physik & Pet-Tracking
+        if self.ball_game.active:
+            ground_y = self.height() - 25
+            self.ball_game.update_physics(ground_y)
+
+            # Pet läuft dem Ball hinterher
+            ball_local_x = self.ball_game.x
+            pet_center_x = self.width() // 2
+
+            if not self.ball_game.target_caught:
+                dist = ball_local_x - pet_center_x
+                if abs(dist) > 20:
+                    if dist > 0:
+                        self.current_anim = "running-right"
+                        self.move(self.x() + 3, self.y())
+                    else:
+                        self.current_anim = "running-left"
+                        self.move(self.x() - 3, self.y())
+                else:
+                    # Ball gefangen!
+                    self.ball_game.target_caught = True
+                    self.ball_game.active = False
+                    self.current_anim = "jumping"
+                    self.anim_start_time = now
+                    self.sfx.play("ball_catch")
+                    self.add_particle("⭐", QColor(250, 204, 21))
+                    self.add_particle("🎾", QColor(163, 230, 53), offset_y=-10)
+                    self.config.add_xp(15)
+                    self.voice.speak("Hab ihn gefangen! Das war ein Riesenspaß! 🎾✨")
+
+        # 3. Gaze Tracking
+        elif self.gaze_tracking_enabled and self.current_anim == "idle" and not self.tamagotchi.is_sleeping:
             cursor_pos = QCursor.pos()
             pet_center = self.mapToGlobal(QPoint(self.width() // 2, self.height() // 2))
             dx = cursor_pos.x() - pet_center.x()
@@ -1176,7 +1686,7 @@ class DesktopPetWindow(QWidget):
         else:
             self.gaze_dir = 0
 
-        # 2. Animations-Frame berechnen
+        # 4. Animations-Frame berechnen
         anim_cfg = ANIMATIONS.get(self.current_anim, ANIMATIONS["idle"])
         elapsed_ms = int((now - self.anim_start_time) * 1000)
 
@@ -1192,8 +1702,8 @@ class DesktopPetWindow(QWidget):
             else:
                 self.frame_idx = min(anim_cfg["frames"] - 1, int(elapsed_ms / (total_dur / anim_cfg["frames"])))
 
-        # 3. Autonomes Roaming
-        if self.config.get("roaming_enabled", True) and not self.is_dragging:
+        # 5. Autonomes Roaming (nur wenn wach und kein Ball im Spiel)
+        if self.config.get("roaming_enabled", True) and not self.is_dragging and not self.ball_game.active and not self.tamagotchi.is_sleeping:
             if now > self.next_roam_decision:
                 choice = random.random()
                 if choice < 0.35:
@@ -1251,9 +1761,32 @@ class DesktopPetWindow(QWidget):
     def _on_nag_triggered(self, vital_type: str, text: str):
         self.speech_bubble_text = text
         self.speech_bubble_timeout = time.time() + 5.0
-        # Hüpf-Animation bei Notstand
         self.current_anim = "jumping"
         self.anim_start_time = time.time()
+
+    def _on_level_up(self, lvl: int, title: str):
+        for _ in range(8):
+            self.add_particle("⭐", QColor(250, 204, 21), offset_x=random.uniform(-25, 25))
+        self.speech_bubble_text = f"LEVEL UP! Level {lvl} ({title})! 🎉"
+        self.speech_bubble_timeout = time.time() + 4.5
+        self.current_anim = "jumping"
+
+    def _on_pomodoro_tick(self, mode: str, secs: int):
+        self.update()
+
+    def _on_pomodoro_finished(self, completed_mode: str):
+        if completed_mode == "FOCUS":
+            self.sfx.play("level_up")
+            self.voice.speak("Pomodoro-Fokus vollendet! Große Klasse! Jetzt 5 Minuten Pause machen! ☕")
+            self.config.add_xp(50)
+            prog = self.config.data.setdefault("progression", {})
+            prog["pomodoros_done_today"] = prog.get("pomodoros_done_today", 0) + 1
+            self.config.save()
+            for _ in range(6):
+                self.add_particle("🍅", QColor(239, 68, 68))
+        else:
+            self.sfx.play("happy")
+            self.voice.speak("Pause beendet! Bereit für die nächste Runde!")
 
     # ==========================================================================
     # PAINTING & RENDERING (ANTI-ALIASED SMOOTH TRANSFORMATION)
@@ -1269,11 +1802,17 @@ class DesktopPetWindow(QWidget):
         if self.config.get("show_tamagotchi_hud", True):
             self._draw_tamagotchi_hud(painter)
 
-        # 2. Sprechblase zeichnen (falls aktiv)
-        if self.speech_bubble_text and now < self.speech_bubble_timeout:
+        # 2. Sprechblase zeichnen
+        if self.speech_bubble_text and now < self.speech_bubble_timeout and not self.tamagotchi.is_sleeping:
             self._draw_speech_bubble(painter)
 
-        # 3. Pet Sprite bilinearglättend rendern
+        # 3. Tennisball zeichnen
+        if self.ball_game.active:
+            painter.setPen(QPen(QColor(163, 230, 53), 1.5))
+            painter.setBrush(QColor(190, 242, 100))
+            painter.drawEllipse(int(self.ball_game.x - 7), int(self.ball_game.y - 7), 14, 14)
+
+        # 4. Pet Sprite bilinearglättend rendern
         if self.spritesheet and not self.spritesheet.isNull():
             anim_cfg = ANIMATIONS.get(self.current_anim, ANIMATIONS["idle"])
             row = anim_cfg["row"]
@@ -1282,7 +1821,6 @@ class DesktopPetWindow(QWidget):
             src_x = col * FRAME_WIDTH
             src_y = row * FRAME_HEIGHT
 
-            # Gaze Blickoffset bei Idle
             gaze_off_x = 0
             gaze_off_y = 0
             if self.gaze_dir > 0 and self.current_anim == "idle":
@@ -1290,7 +1828,6 @@ class DesktopPetWindow(QWidget):
                 gaze_off_x = int(math.cos(rad) * 4)
                 gaze_off_y = int(math.sin(rad) * 3)
 
-            # Audio-RMS Bounce bei Sprache
             bounce_y = int(self.audio_level * -8.0) if self.voice.is_speaking() else 0
 
             dst_w = int(FRAME_WIDTH * self.scale)
@@ -1305,94 +1842,119 @@ class DesktopPetWindow(QWidget):
                 Qt.TransformationMode.SmoothTransformation
             )
 
-            # Sanfter Schatten unter dem Pet
+            # Schatten
             shadow_rect = QRectF(dst_x + 10, dst_y + dst_h - 10, dst_w - 20, 10)
             painter.setPen(Qt.PenStyle.NoPen)
-            painter.setBrush(QColor(0, 0, 0, 70))
+            painter.setBrush(QColor(0, 0, 0, 75))
             painter.drawEllipse(shadow_rect)
 
+            # Wenn schlafend: leicht abgedunkelt
+            if self.tamagotchi.is_sleeping:
+                painter.setOpacity(0.85)
+
             painter.drawImage(dst_x, dst_y, scaled_frame)
+            painter.setOpacity(1.0)
+
+        # 5. Schwebende Partikel zeichnen
+        for p in self.particles:
+            alpha = int(p.alpha() * 255)
+            if alpha > 0:
+                col = QColor(p.color)
+                col.setAlpha(alpha)
+                painter.setPen(col)
+                painter.setFont(QFont("sans-serif", 10, QFont.Weight.Bold))
+                painter.drawText(int(p.x), int(p.y), p.text)
 
     def _draw_tamagotchi_hud(self, painter: QPainter):
-        """Zeichnet die 3 Statusbalken (Hunger, Durst, Pause) und nächsten Termin"""
         hud_w = self.width() - 10
-        hud_h = 44
+        hud_h = 48
         hud_x = 5
         hud_y = 5
 
-        # Hintergrund-Pille
-        painter.setPen(QPen(QColor(0, 212, 255, 120), 1))
-        painter.setBrush(QColor(10, 15, 24, 210))
+        thm_key = self.config.get("hud_theme", "cyberpunk")
+        theme = HUD_THEMES.get(thm_key, HUD_THEMES["cyberpunk"])
+
+        # Hintergrund-Pille mit Theme-Farbe
+        painter.setPen(QPen(theme["border"], 1.2))
+        painter.setBrush(theme["bg"])
         painter.drawRoundedRect(hud_x, hud_y, hud_w, hud_h, 8, 8)
+
+        # Schlafmodus-Anzeige
+        if self.tamagotchi.is_sleeping:
+            painter.setFont(QFont("sans-serif", 8, QFont.Weight.Bold))
+            painter.setPen(QColor(147, 197, 253))
+            painter.drawText(QRect(hud_x, hud_y + 12, hud_w, 20), Qt.AlignmentFlag.AlignCenter, "💤 Schläft tief und fest (DND)")
+            return
 
         # 3 Mini-Balken: 🥪 Hunger, 💧 Durst, ⚡ Energie
         vitals = [
-            ("🥪", self.tamagotchi.hunger, QColor(34, 197, 94)),
-            ("💧", self.tamagotchi.thirst, QColor(6, 182, 212)),
-            ("⚡", self.tamagotchi.energy, QColor(245, 158, 11))
+            ("🥪", self.tamagotchi.hunger, theme["hunger"]),
+            ("💧", self.tamagotchi.thirst, theme["thirst"]),
+            ("⚡", self.tamagotchi.energy, theme["energy"])
         ]
 
         bar_w = (hud_w - 24) // 3
         bar_h = 5
-        font = QFont("sans-serif", 8, QFont.Weight.Bold)
-        painter.setFont(font)
+        painter.setFont(QFont("sans-serif", 8, QFont.Weight.Bold))
 
         for i, (icon, val, base_color) in enumerate(vitals):
             bx = hud_x + 6 + i * (bar_w + 6)
-            by = hud_y + 6
+            by = hud_y + 5
 
-            # Icon & Prozent
-            painter.setPen(QColor(255, 255, 255, 220))
-            painter.drawText(bx, by + 11, f"{icon} {int(val)}%")
+            painter.setPen(theme["text"])
+            painter.drawText(bx, by + 12, f"{icon} {int(val)}%")
 
-            # Balken-Hintergrund
-            bar_y = by + 16
+            bar_y = by + 17
             painter.setPen(Qt.PenStyle.NoPen)
             painter.setBrush(QColor(30, 41, 59, 180))
             painter.drawRoundedRect(bx, bar_y, bar_w, bar_h, 2, 2)
 
-            # Farbverlauf bei kritischem Stand
             fill_color = base_color
             if val < 25.0:
-                fill_color = QColor(239, 68, 68)  # Rot
+                fill_color = QColor(239, 68, 68)
             elif val < 50.0:
-                fill_color = QColor(234, 179, 8)   # Gelb
+                fill_color = QColor(234, 179, 8)
 
             fill_w = max(2, int((bar_w * val) / 100.0))
             painter.setBrush(fill_color)
             painter.drawRoundedRect(bx, bar_y, fill_w, bar_h, 2, 2)
 
-        # Nächster Termin Badge (untere Zeile im HUD)
-        next_app = self.tamagotchi.get_next_appointment()
+        # Untere Info-Zeile: Pomodoro / Termine / Level
         painter.setFont(QFont("sans-serif", 7))
-        if next_app:
-            t_str = f"📅 {next_app.get('time')}: {next_app.get('title')}"
-            painter.setPen(QColor(0, 212, 255, 240))
-            painter.drawText(hud_x + 8, hud_y + 38, t_str[:32])
+        if self.pomodoro.mode != "OFF":
+            mins = self.pomodoro.seconds_left // 60
+            secs = self.pomodoro.seconds_left % 60
+            badge = "🍅 Fokus" if self.pomodoro.mode == "FOCUS" else "☕ Pause"
+            pomo_str = f"{badge}: {mins:02d}:{secs:02d}"
+            painter.setPen(QColor(239, 68, 68) if self.pomodoro.mode == "FOCUS" else QColor(34, 197, 94))
+            painter.drawText(hud_x + 8, hud_y + 42, pomo_str)
         else:
-            painter.setPen(QColor(148, 163, 184, 180))
-            painter.drawText(hud_x + 8, hud_y + 38, "📅 Keine Termine heute")
+            next_app = self.tamagotchi.get_next_appointment()
+            if next_app:
+                t_str = f"📅 {next_app.get('time')}: {next_app.get('title')}"
+                painter.setPen(theme["accent"])
+                painter.drawText(hud_x + 8, hud_y + 42, t_str[:30])
+            else:
+                lvl, tit, _ = self.config.get_level_info()
+                painter.setPen(QColor(148, 163, 184, 200))
+                painter.drawText(hud_x + 8, hud_y + 42, f"⭐ Lv. {lvl} {tit}")
 
     def _draw_speech_bubble(self, painter: QPainter):
-        """Zeichnet eine animierte Comic-Sprechblase mit Textumbruch"""
         text = self.speech_bubble_text
-        font = QFont("sans-serif", 8, QFont.Weight.Bold)
-        painter.setFont(font)
+        painter.setFont(QFont("sans-serif", 8, QFont.Weight.Bold))
 
-        bubble_w = min(self.width() + 40, 210)
+        bubble_w = min(self.width() + 40, 220)
         bubble_x = (self.width() - bubble_w) // 2
-        bubble_y = self.hud_height + 2
+        bubble_y = self.hud_height + 4
 
         metrics = painter.fontMetrics()
         rect = metrics.boundingRect(QRect(0, 0, bubble_w - 16, 200), Qt.TextFlag.TextWordWrap, text)
         bubble_h = rect.height() + 14
 
-        # Blasen-Körper
         painter.setPen(QPen(QColor(0, 212, 255, 180), 1.5))
-        painter.setBrush(QColor(15, 23, 42, 235))
+        painter.setBrush(QColor(15, 23, 42, 240))
         painter.drawRoundedRect(bubble_x, bubble_y, bubble_w, bubble_h, 10, 10)
 
-        # Text
         painter.setPen(QColor(255, 255, 255))
         text_rect = QRect(bubble_x + 8, bubble_y + 6, bubble_w - 16, bubble_h - 10)
         painter.drawText(text_rect, Qt.TextFlag.TextWordWrap | Qt.AlignmentFlag.AlignCenter, text)
@@ -1419,22 +1981,25 @@ class DesktopPetWindow(QWidget):
         if event.button() == Qt.MouseButton.LeftButton:
             self.is_dragging = False
             if self.drag_moved_threshold:
-                # Koordinaten speichern
                 self.config.set("pos_x", self.x())
                 self.config.set("pos_y", self.y())
-                # Frecher Spruch nach Drag & Drop
                 drag_line = random.choice(OFFLINE_NAG_LINES["drag"])
                 self.speech_bubble_text = drag_line
                 self.speech_bubble_timeout = time.time() + 4.0
                 self.voice.speak(drag_line)
             else:
-                # Klick-Reaktion
-                click_line = random.choice(OFFLINE_NAG_LINES["click"])
-                self.speech_bubble_text = click_line
-                self.speech_bubble_timeout = time.time() + 3.0
-                self.current_anim = "waving"
-                self.anim_start_time = time.time()
-                self.voice.speak(click_line)
+                if self.tamagotchi.is_sleeping:
+                    self.tamagotchi.toggle_sleep()
+                else:
+                    click_line = random.choice(OFFLINE_NAG_LINES["click"])
+                    self.speech_bubble_text = click_line
+                    self.speech_bubble_timeout = time.time() + 3.0
+                    self.current_anim = "waving"
+                    self.anim_start_time = time.time()
+                    self.sfx.play("happy")
+                    self.add_particle("❤️", QColor(244, 63, 94))
+                    self.config.add_xp(5)
+                    self.voice.speak(click_line)
             event.accept()
 
     # ==========================================================================
@@ -1467,36 +2032,60 @@ class DesktopPetWindow(QWidget):
             }
         """)
 
-        # 1. Tamagotchi Aktionen ("Pflegen")
-        act_feed = menu.addAction("🥪 Snack / Mahlzeit gegessen (+50%)")
-        act_feed.triggered.connect(self.tamagotchi.feed)
+        # 1. Snack-Bar & Füttern Submenü
+        snack_menu = menu.addMenu("🍽️ Snack-Bar & Füttern")
+        snack_menu.addAction("🥪 Sandwich / Mahlzeit (+50% Hunger)").triggered.connect(lambda: self._feed_snack_action("sandwich"))
+        snack_menu.addAction("🍎 Knackiger Apfel (+25% Hunger, +10% Vitalität)").triggered.connect(lambda: self._feed_snack_action("apple"))
+        snack_menu.addAction("☕ Heißer Kaffee / Espresso (+40% Energie-Boost)").triggered.connect(lambda: self._feed_snack_action("coffee"))
+        snack_menu.addAction("🥤 Frisches Glas Wasser (+50% Hydration)").triggered.connect(lambda: self._feed_snack_action("water"))
+        snack_menu.addAction("🍩 Süßer Donut (+30% Hunger, +10 Zuneigung)").triggered.connect(lambda: self._feed_snack_action("donut"))
 
-        act_drink = menu.addAction("💧 Glas Wasser getrunken (+50%)")
-        act_drink.triggered.connect(self.tamagotchi.drink)
-
-        act_break = menu.addAction("🧘 Pause gemacht & gestreckt (+100%)")
-        act_break.triggered.connect(self.tamagotchi.take_break)
+        act_break = menu.addAction("🧘 Bildschirmpause machen & Dehnen (+100%)")
+        act_break.triggered.connect(self._take_break_action)
 
         menu.addSeparator()
 
-        # 2. Stimmen-Submenü (4 Stimmen direkt umschaltbar)
+        # 2. Interaktives Ballspiel
+        act_ball = menu.addAction("🎾 Ball werfen (Fangspiel)")
+        act_ball.triggered.connect(self._throw_ball_action)
+
+        # 3. Pomodoro Fokus
+        if self.pomodoro.mode == "OFF":
+            act_pomo = menu.addAction("🍅 Pomodoro Fokus starten (25 Min)")
+            act_pomo.triggered.connect(lambda: self.pomodoro.start_focus(25))
+        else:
+            act_pomo = menu.addAction(f"⏹️ Pomodoro stoppen ({self.pomodoro.seconds_left // 60}m verbleibend)")
+            act_pomo.triggered.connect(self.pomodoro.stop)
+
+        # 4. Schlaf- & Nachtmodus (DND)
+        sleep_text = "⏰ Aufwecken" if self.tamagotchi.is_sleeping else "💤 Schlafen legen (Zzz... DND)"
+        act_sleep = menu.addAction(sleep_text)
+        act_sleep.triggered.connect(self._toggle_sleep_action)
+
+        menu.addSeparator()
+
+        # 5. Stimmen-Submenü (4 Stimmen)
         voice_menu = menu.addMenu("🎙️ Stimme auswählen")
         cur_v = self.config.get("voice", "lola")
         for k, v in VOICES.items():
             act_v = voice_menu.addAction(f"{'✓ ' if k == cur_v else ''}{v['name']}")
             act_v.triggered.connect(lambda ch, vk=k: self._change_voice_quick(vk))
 
-        # 3. Tamagotchi HUD Toggle
-        hud_text = "📊 Tamagotchi-Leiste verbergen" if self.config.get("show_tamagotchi_hud", True) else "📊 Tamagotchi-Leiste einblenden"
-        act_hud = menu.addAction(hud_text)
-        act_hud.triggered.connect(self._toggle_hud)
+        # 6. Themes Submenü
+        theme_menu = menu.addMenu("🎨 HUD-Theme")
+        cur_t = self.config.get("hud_theme", "cyberpunk")
+        for tk, tv in HUD_THEMES.items():
+            act_t = theme_menu.addAction(f"{'✓ ' if tk == cur_t else ''}{tv['name']}")
+            act_t.triggered.connect(lambda ch, thk=tk: self._set_theme(thk))
 
-        # 4. Roaming Toggle
+        # 7. Tamagotchi HUD Toggle & Roaming
+        hud_text = "📊 Statusleiste verbergen" if self.config.get("show_tamagotchi_hud", True) else "📊 Statusleiste einblenden"
+        menu.addAction(hud_text).triggered.connect(self._toggle_hud)
+
         roam_text = "🚶 Wandern stoppen" if self.config.get("roaming_enabled", True) else "🚶 Selbstständig wandern"
-        act_roam = menu.addAction(roam_text)
-        act_roam.triggered.connect(self._toggle_roaming)
+        menu.addAction(roam_text).triggered.connect(self._toggle_roaming)
 
-        # 5. Skalierung Submenü
+        # 8. Skalierung Submenü
         scale_menu = menu.addMenu("📏 Größe ändern")
         for s_val, s_name in [(0.50, "Klein (50%)"), (0.70, "Standard (70%)"), (0.85, "Groß (85%)"), (1.0, "Voll (100%)")]:
             act_s = scale_menu.addAction(f"{'✓ ' if abs(self.scale - s_val) < 0.05 else ''}{s_name}")
@@ -1504,17 +2093,48 @@ class DesktopPetWindow(QWidget):
 
         menu.addSeparator()
 
-        # 6. Einstellungen
-        act_settings = menu.addAction("⚙️ Einstellungen & KI-Konfiguration...")
+        # 9. Einstellungen
+        act_settings = menu.addAction("⚙️ Einstellungen & Dashboard...")
         act_settings.triggered.connect(self._open_settings)
 
         menu.addSeparator()
 
-        # 7. Beenden
+        # 10. Beenden
         act_exit = menu.addAction("❌ Beenden")
         act_exit.triggered.connect(self._exit_app)
 
         menu.exec(event.globalPos())
+
+    def _feed_snack_action(self, snack_type: str):
+        msg, icon = self.tamagotchi.feed_snack(snack_type)
+        self.speech_bubble_text = msg
+        self.speech_bubble_timeout = time.time() + 3.5
+        self.current_anim = "waving"
+        self.anim_start_time = time.time()
+        self.add_particle(icon, QColor(250, 204, 21))
+        self.voice.speak(msg)
+
+    def _take_break_action(self):
+        self.tamagotchi.take_break()
+        self.add_particle("🧘", QColor(34, 197, 94))
+        self.add_particle("✨", QColor(250, 204, 21), offset_y=-10)
+
+    def _throw_ball_action(self):
+        start_x = self.width() // 2
+        start_y = self.height() - 40
+        target_x = random.choice([30, self.width() - 30])
+        self.ball_game.throw(start_x, start_y, target_x)
+        self.speech_bubble_text = "Hui! Wo fliegt der Ball hin?! Ich krieg ihn! 🎾"
+        self.speech_bubble_timeout = time.time() + 3.0
+        self.sfx.play("ball_catch")
+
+    def _toggle_sleep_action(self):
+        is_sleeping = self.tamagotchi.toggle_sleep()
+        if is_sleeping:
+            self.speech_bubble_text = "Gute Nacht... Zzz..."
+            self.speech_bubble_timeout = time.time() + 2.5
+            self.current_anim = "idle"
+        self.update()
 
     def _change_voice_quick(self, voice_key: str):
         self.config.set("voice", voice_key)
@@ -1522,7 +2142,11 @@ class DesktopPetWindow(QWidget):
         msg = f"Stimme gewechselt zu {vname}!"
         self.speech_bubble_text = msg
         self.speech_bubble_timeout = time.time() + 3.0
-        self.voice.speak(f"Stimme aktiviert. Ich bin bereit!")
+        self.voice.speak("Stimme aktiviert. Ich bin bereit!")
+
+    def _set_theme(self, theme_key: str):
+        self.config.set("hud_theme", theme_key)
+        self.update()
 
     def _toggle_hud(self):
         cur = self.config.get("show_tamagotchi_hud", True)
@@ -1543,7 +2167,7 @@ class DesktopPetWindow(QWidget):
         self.update()
 
     def _open_settings(self):
-        dlg = SettingsDialog(self.config, self.voice, self.llm, self)
+        dlg = SettingsDialog(self.config, self.voice, self.llm, self.tamagotchi, self)
         if dlg.exec():
             self.scale = float(self.config.get("scale", 0.70))
             self._update_window_size()
@@ -1557,7 +2181,7 @@ class DesktopPetWindow(QWidget):
 
 
 # ==============================================================================
-# 7. HAUPTPROGRAMM (MAIN)
+# 11. HAUPTPROGRAMM (MAIN)
 # ==============================================================================
 def main():
     app = QApplication(sys.argv)
@@ -1565,14 +2189,15 @@ def main():
     app.setQuitOnLastWindowClosed(False)
 
     config = ConfigManager()
-    voice = VoiceEngine(config)
+    sfx = RetroSoundSynthesizer()
+    voice = VoiceEngine(config, sfx)
     llm = LLMEngine(config)
-    tamagotchi = TamagotchiEngine(config, llm, voice)
+    tamagotchi = TamagotchiEngine(config, llm, voice, sfx)
 
-    window = DesktopPetWindow(config, voice, llm, tamagotchi)
+    window = DesktopPetWindow(config, voice, llm, tamagotchi, sfx)
     window.show()
 
-    # Begrüßung
+    sfx.play("happy")
     QTimer.singleShot(1000, lambda: voice.speak("Hallo! Yuyu ist online und behält deinen Tag im Blick! 🐾"))
 
     sys.exit(app.exec())
