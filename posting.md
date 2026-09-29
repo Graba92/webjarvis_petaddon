@@ -1,24 +1,25 @@
-# 🐾 Release: WebJarvis Desktop Pet v1.2.0 (OpenPets Mini Core)
+# 🐾 Release: Desktop Pet & Tamagotchi AI Companion v2.0 (OpenPets Mini Core)
 
-> **Bring your AI assistant to life right on your Linux desktop!** A high-definition, anti-aliased PyQt6 desktop companion for WebJarvis featuring OpenPets V2 spritesheets, 16-sector cursor gaze, live voice switching without restart, audio rhythm bounce, and persistent OS installation.
+> **Bring a cheeky, health-guarding Tamagotchi companion to your Linux desktop!** A 100% standalone, anti-aliased PyQt6 desktop buddy with OpenPets V2 spritesheets, universal LLM API-key configuration (Gemini, OpenAI, Groq, OpenRouter, Ollama), 4 distinct character voices, Tamagotchi vitals (hunger, thirst, breaks), and a relentless nagging mode reminding you to stay hydrated and take care of yourself!
 
 ---
 
 ### 🌐 Social Media / Reddit / Discord Announcement
 
 ```text
-🚀 MAJOR UPDATE: WebJarvis Desktop Pet v1.2.0 is out! 🐾✨
+🚀 NEW RELEASE: Desktop Pet & Tamagotchi AI Companion v2.0! 🐾✨
 
-We completely revamped our desktop companion for Linux (CachyOS / KDE Plasma):
+We completely rebuilt our Linux desktop companion into a 100% STANDALONE Tamagotchi and health buddy:
 
-✨ What's New:
-• 🎨 Studio-Quality Anti-Aliasing (SmoothTransformation — crisp, silky, zero pixelation!)
-• 🖱️ Interactive Drag & Drop: Move Yuyu anywhere on your screen and Jarvis speaks directly in response!
-• 🎙️ Live Voice Switching (No Restart!): Right-click to switch between Male (Puck) and Female (Aoede) in real time
-• 🎵 Audio-RMS Rhythm Bounce: Yuyu bounces gently with Jarvis speech
-• ⚡ Jarvis Desktop Controls: Toggle microphone, interrupt speech, or launch WebJarvis directly from the pet's context menu
-• 📦 Persistent OS Installer: Installs to ~/.local/share/webjarvis_petaddon with ~/.local/bin/webjarvis-pet & KDE App Launcher integration
+✨ Highlights:
+• 🖥️ 100% Standalone (OpenPets Style): Zero browser dependencies, native floating PyQt6 overlay with KDE Plasma / Wayland support!
+• 🤖 Universal LLM Support: Plug in ANY API Key (Gemini, OpenAI, Groq, OpenRouter, Ollama) or run completely offline!
+• 🎙️ 4 Distinct Character Voices: Lola (cheeky), Buster (sarcastic), Mimi (caring), Klaus (dry/deep) with voice preview!
+• 🐾 Tamagotchi Vitals HUD: Live progress bars for Hunger 🥪, Thirst 💧, Breaks/Energy ⚡ and Appointments 📅 right above the pet!
+• 😼 The Little Pest (Nagging Mode): Low stats or upcoming meetings? Yuyu jumps, pops up speech bubbles, and loudly nags you to drink water and take a break!
+• 🥪 Interactive Care: Right-click to mark "Drank water", "Ate food", or "Took a break"
+• 📦 Persistent OS Installer: Installs to ~/.local/share/webjarvis_petaddon with 'desktop-pet' CLI command & KDE app launcher!
 
 📁 Repository: https://github.com/Graba92/webjarvis_petaddon
-#OpenPets #WebJarvis #AICompanion #PyQt6 #Linux #CachyOS #KDEPlasma #OpenSource
+#OpenPets #Linux #CachyOS #KDEPlasma #AICompanion #Tamagotchi #Python #PyQt6 #OpenSource
 ```
