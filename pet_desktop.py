@@ -1655,6 +1655,7 @@ class DesktopPetWindow(QWidget):
 
         # Signale verbinden
         self.voice.speech_started.connect(self._on_speech_started)
+        self.voice.speech_finished.connect(self._on_speech_finished)
         self.voice.audio_level.connect(self._on_audio_level)
         self.tamagotchi.nag_triggered.connect(self._on_nag_triggered)
         self.tamagotchi.vitals_updated.connect(lambda v: self.update())
@@ -1964,6 +1965,14 @@ class DesktopPetWindow(QWidget):
     def _on_speech_started(self, text: str):
         self.speech_bubble_text = text
         self.speech_bubble_timeout = time.time() + max(3.5, len(text) * 0.065)
+        if self.current_anim == "idle":
+            self.current_anim = "review"
+            self.anim_start_time = time.time()
+
+    def _on_speech_finished(self):
+        if self.current_anim == "review":
+            self.current_anim = "idle"
+            self.anim_start_time = time.time()
 
     def _on_audio_level(self, lvl: float):
         self.audio_level = lvl
@@ -2259,6 +2268,38 @@ class DesktopPetWindow(QWidget):
         if event.button() == Qt.MouseButton.LeftButton:
             self.pet_animal()
             event.accept()
+
+    def keyPressEvent(self, event):
+        key = event.key()
+        if key == Qt.Key.Key_Space:
+            self.pet_animal()
+            event.accept()
+        elif key == Qt.Key.Key_F:
+            self._feed_snack_action("sandwich")
+            event.accept()
+        elif key == Qt.Key.Key_W:
+            self._feed_snack_action("water")
+            event.accept()
+        elif key == Qt.Key.Key_B:
+            self._throw_ball_action()
+            event.accept()
+        elif key == Qt.Key.Key_D:
+            self.roll_dice()
+            event.accept()
+        elif key == Qt.Key.Key_Z:
+            self._toggle_sleep_action()
+            event.accept()
+        elif key == Qt.Key.Key_P:
+            if self.pomodoro.mode == "OFF":
+                self.pomodoro.start_focus(25)
+            else:
+                self.pomodoro.stop()
+            event.accept()
+        elif key == Qt.Key.Key_Escape:
+            self._toggle_visibility()
+            event.accept()
+        else:
+            super().keyPressEvent(event)
 
     def pet_animal(self):
         """Streicheln mit Schnurren, Herzexplosion und Affection Boost"""
