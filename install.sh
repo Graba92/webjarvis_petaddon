@@ -34,7 +34,12 @@ chmod +x "$TARGET_DIR/pet_desktop.py" "$TARGET_DIR/run.sh"
 echo "⚡ 2. Erstelle CLI-Starter in $BIN_DIR/desktop-pet..."
 cat << 'EOF' > "$BIN_DIR/desktop-pet"
 #!/usr/bin/env bash
-export QT_QPA_PLATFORM=xcb
+if [ -n "$WAYLAND_DISPLAY" ]; then
+    export QT_QPA_PLATFORM="xcb;wayland"
+else
+    export QT_QPA_PLATFORM="xcb"
+fi
+cd "${HOME}/.local/share/webjarvis_petaddon"
 exec python3 "${HOME}/.local/share/webjarvis_petaddon/pet_desktop.py" "$@"
 EOF
 chmod +x "$BIN_DIR/desktop-pet"
@@ -44,18 +49,29 @@ ln -sf "$BIN_DIR/desktop-pet" "$BIN_DIR/webjarvis-pet"
 
 # 4. Desktop-Entry für KDE Plasma / CachyOS Anwendungsmenü erstellen
 echo "🖥️ 3. Erstelle Desktop-Eintrag in $APP_DIR/desktop-pet.desktop..."
+KSTART_BIN=""
+if command -v kstart >/dev/null 2>&1; then
+    KSTART_BIN="$(command -v kstart) -- "
+fi
+
 cat << EOF > "$APP_DIR/desktop-pet.desktop"
 [Desktop Entry]
 Name=Desktop Pet & Tamagotchi AI (Yuyu)
+GenericName=Desktop Pet & Tamagotchi
 Comment=Frecher animierter Desktop-Begleiter mit Tamagotchi-System, 4 Stimmen und Terminerinnerung
-Exec=${HOME}/.local/bin/desktop-pet
+Exec=${KSTART_BIN}${HOME}/.local/bin/desktop-pet
+Path=${HOME}/.local/share/webjarvis_petaddon
 Icon=preferences-desktop-emoticons
 Terminal=false
 Type=Application
-Categories=Utility;Amusement;
+Categories=Utility;Amusement;Qt;KDE;
 Keywords=pet;tamagotchi;companion;ai;reminder;yuyu;openpets;
 StartupNotify=false
 EOF
+
+# KDE Plasma Cache aktualisieren
+update-desktop-database "$APP_DIR" 2>/dev/null || true
+kbuildsycoca6 2>/dev/null || true
 
 # 5. Optional im System-Pfad prüfen
 if [[ ":$PATH:" != *":$HOME/.local/bin:"* ]]; then

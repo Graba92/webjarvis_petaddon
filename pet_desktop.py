@@ -131,6 +131,8 @@ ANIMATIONS = {
     "review": {"row": 8, "frames": 6, "duration_ms": 1030, "loop": True},
     "eating": {"row": 0, "frames": 6, "duration_ms": 1400, "loop": False},
     "drinking": {"row": 0, "frames": 6, "duration_ms": 1400, "loop": False},
+    "party": {"row": 4, "frames": 8, "duration_ms": 680, "loop": True},
+    "stretch": {"row": 3, "frames": 8, "duration_ms": 1600, "loop": False},
 }
 
 # 4 Auswählbare Stimmen
@@ -394,7 +396,7 @@ class RetroSoundSynthesizer:
 # 2. SCHWEBENDE PARTIKEL-ENGINE (HEARTS, STARS, ICONS, ZZZ)
 # ==============================================================================
 class Particle:
-    def __init__(self, x: float, y: float, text: str, color: QColor, vx: float = 0.0, vy: float = -1.2, max_life: float = 2.0):
+    def __init__(self, x: float, y: float, text: str, color: QColor, vx: float = 0.0, vy: float = -1.2, max_life: float = 2.0, sway: bool = False):
         self.x = x
         self.y = y
         self.text = text
@@ -403,11 +405,14 @@ class Particle:
         self.vy = vy
         self.birth = time.time()
         self.max_life = max_life
+        self.sway = sway
 
     def update(self) -> bool:
-        self.x += self.vx
+        age = time.time() - self.birth
+        sway_offset = math.sin(age * 5.0) * 0.7 if self.sway else 0.0
+        self.x += self.vx + sway_offset
         self.y += self.vy
-        return (time.time() - self.birth) < self.max_life
+        return age < self.max_life
 
     def alpha(self) -> float:
         age = time.time() - self.birth
@@ -425,6 +430,7 @@ class BallGame:
         self.vx = 0.0
         self.vy = 0.0
         self.target_caught = False
+        self.squash = 1.0
 
     def throw(self, start_x: float, start_y: float, target_x: float):
         self.active = True
@@ -433,6 +439,7 @@ class BallGame:
         self.y = start_y
         self.vx = (target_x - start_x) * 0.04
         self.vy = -7.5  # Bogenwurf
+        self.squash = 1.0
 
     def update_physics(self, ground_y: float):
         if not self.active:
@@ -442,10 +449,14 @@ class BallGame:
         self.x += self.vx
         self.y += self.vy
 
+        # Dynamische Squash-Erholung
+        self.squash += (1.0 - self.squash) * 0.22
+
         if self.y >= ground_y:
             self.y = ground_y
             self.vy = -self.vy * 0.65  # Abprallen
             self.vx *= 0.85  # Reibung
+            self.squash = 0.55  # Horizontale Stauchung beim Aufprall
             if abs(self.vy) < 1.0:
                 self.vy = 0.0
 
@@ -1663,14 +1674,15 @@ class DesktopPetWindow(QWidget):
         self.tamagotchi = tamagotchi
         self.sfx = sfx
 
-        # Fenster-Flags: Transparent, rahmenlos, immer im Vordergrund
+        # Fenster-Flags: Transparent, rahmenlos, immer im Vordergrund als schwebendes Desktop-Tool
         self.setWindowFlags(
             Qt.WindowType.FramelessWindowHint |
             Qt.WindowType.WindowStaysOnTopHint |
-            Qt.WindowType.SubWindow
+            Qt.WindowType.Tool
         )
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
         self.setAttribute(Qt.WidgetAttribute.WA_NoSystemBackground, True)
+        self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating, True)
 
         # Spritesheet laden
         self.spritesheet = None
@@ -1710,7 +1722,16 @@ class DesktopPetWindow(QWidget):
         self._last_system_check = time.time()
         self._blush_until = 0.0
         self._last_blink_time = 0.0
+        self._blink_until = 0.0
         self._next_blink_trigger = time.time() + random.uniform(2.5, 5.0)
+        self.current_tilt = 0.0
+        self.target_tilt = 0.0
+        self._snack_anim = None
+        self.next_frame_idx = 0
+        self.subframe_progress = 0.0
+        self.is_hovered = False
+        self._dance_end_time = 0.0
+        self.setMouseTracking(True)
 
         # Signale verbinden
         self.voice.speech_started.connect(self._on_speech_started)
@@ -1977,6 +1998,8 @@ class DesktopPetWindow(QWidget):
             self.target_tilt = 4.0
         elif self.current_anim == "running-left":
             self.target_tilt = -4.0
+        elif getattr(self, "is_hovered", False) and self.current_anim in ["idle", "waiting"] and not self.tamagotchi.is_sleeping:
+            self.target_tilt = math.sin(now * 15.0) * 2.8
         else:
             self.target_tilt = 0.0
         self.current_tilt += (self.target_tilt - self.current_tilt) * 0.25
@@ -1990,27 +2013,54 @@ class DesktopPetWindow(QWidget):
             self.current_anim = "idle"
             self.anim_start_time = now
 
+        # Party-Tanz Zeitüberwachung
+        if self.current_anim == "party" and now >= getattr(self, "_dance_end_time", 0):
+            self.current_anim = "idle"
+            self.anim_start_time = now
+
+        # Sanft schwebende Zzz-Schlafpartikel
+        if self.tamagotchi.is_sleeping and random.random() < 0.035:
+            self.particles.append(Particle(
+                x=self.width() // 2 + random.uniform(-15, 15),
+                y=self.hud_height + 40,
+                text="💤",
+                color=QColor(147, 197, 253),
+                vx=random.uniform(-0.4, 0.4),
+                vy=random.uniform(-1.2, -1.8),
+                max_life=2.5,
+                sway=True
+            ))
+
         # Längeres Warten -> Geduldiges Umschaun (Reihe 6)
         if self.current_anim == "idle" and self.gaze_dir == -1 and (now - self.anim_start_time > 12.0) and not self.ball_game.active and not self.tamagotchi.is_sleeping:
             self.current_anim = "waiting"
             self.anim_start_time = now
 
-        # 4. Animations-Frame dynamisch berechnen
+        # 4. Animations-Frame dynamisch berechnen mit Subframe-Überblendung
         anim_cfg = ANIMATIONS.get(self.current_anim, ANIMATIONS["idle"])
         frames_avail = max(1, self.atlas.get_frame_count(self.current_anim) if hasattr(self, "atlas") else anim_cfg["frames"])
-        elapsed_ms = int((now - self.anim_start_time) * 1000)
+        elapsed_ms = (now - self.anim_start_time) * 1000.0
+        total_dur = float(anim_cfg["duration_ms"])
 
         if anim_cfg["loop"]:
-            total_dur = anim_cfg["duration_ms"]
-            self.frame_idx = int((elapsed_ms % total_dur) / (total_dur / frames_avail))
+            progress = (elapsed_ms % total_dur) / total_dur
+            frame_float = progress * frames_avail
+            self.frame_idx = int(frame_float) % frames_avail
+            self.next_frame_idx = (self.frame_idx + 1) % frames_avail
+            self.subframe_progress = frame_float - int(frame_float)
         else:
-            total_dur = anim_cfg["duration_ms"]
             if elapsed_ms >= total_dur:
                 self.current_anim = "idle"
                 self.anim_start_time = now
                 self.frame_idx = 0
+                self.next_frame_idx = 0
+                self.subframe_progress = 0.0
             else:
-                self.frame_idx = min(frames_avail - 1, int(elapsed_ms / (total_dur / frames_avail)))
+                progress = elapsed_ms / total_dur
+                frame_float = progress * frames_avail
+                self.frame_idx = min(frames_avail - 1, int(frame_float))
+                self.next_frame_idx = min(frames_avail - 1, self.frame_idx + 1)
+                self.subframe_progress = frame_float - int(frame_float)
 
         # 5. Autonomes Roaming (nur wenn wach und kein Ball im Spiel)
         if self.config.get("roaming_enabled", True) and not self.is_dragging and not self.ball_game.active and not self.tamagotchi.is_sleeping:
@@ -2129,11 +2179,14 @@ class DesktopPetWindow(QWidget):
         if note and not self.tamagotchi.is_sleeping and (not self.speech_bubble_text or now >= self.speech_bubble_timeout):
             self._draw_sticky_note(painter, note)
 
-        # 4. Tennisball zeichnen
+        # 4. Tennisball zeichnen mit Aufprall-Squash
         if self.ball_game.active:
+            sq = getattr(self.ball_game, "squash", 1.0)
+            bw = int(14 * (2.0 - sq))
+            bh = int(14 * sq)
             painter.setPen(QPen(QColor(163, 230, 53), 1.5))
             painter.setBrush(QColor(190, 242, 100))
-            painter.drawEllipse(int(self.ball_game.x - 7), int(self.ball_game.y - 7), 14, 14)
+            painter.drawEllipse(int(self.ball_game.x - bw / 2), int(self.ball_game.y - bh), bw, bh)
 
         # 4. Pet Sprite bilinearglättend rendern
         if self.spritesheet and not self.spritesheet.isNull():
@@ -2146,7 +2199,7 @@ class DesktopPetWindow(QWidget):
             else:
                 anim_cfg = ANIMATIONS.get(self.current_anim, ANIMATIONS["idle"])
                 row = anim_cfg["row"]
-                col = self.frame_idx % anim_cfg["frames"]
+                col = self.frame_idx % (self.atlas.get_frame_count(self.current_anim) if hasattr(self, "atlas") else anim_cfg["frames"])
                 src_x = col * FRAME_WIDTH
                 src_y = row * FRAME_HEIGHT
 
@@ -2161,6 +2214,14 @@ class DesktopPetWindow(QWidget):
                 cycle = math.sin(now * 3.2)
                 scale_mod_y = 1.0 + 0.022 * cycle
                 scale_mod_x = 1.0 - 0.012 * cycle
+            elif self.current_anim == "party":
+                cycle = math.sin(now * 10.0)
+                scale_mod_y = 1.0 + 0.07 * cycle
+                scale_mod_x = 1.0 - 0.04 * cycle
+            elif self.current_anim == "stretch":
+                cycle = math.sin(now * 3.5)
+                scale_mod_y = 1.0 + 0.16 * cycle
+                scale_mod_x = 1.0 - 0.08 * cycle
             elif self.tamagotchi.is_sleeping:
                 cycle = math.sin(now * 1.8)
                 scale_mod_y = 1.0 + 0.035 * cycle
@@ -2192,7 +2253,21 @@ class DesktopPetWindow(QWidget):
 
             target_rect = QRectF(dst_x, dst_y, dst_w, dst_h)
             source_rect = QRectF(src_x, src_y, FRAME_WIDTH, FRAME_HEIGHT)
-            painter.drawImage(target_rect, self.spritesheet, source_rect)
+
+            # Fluid 60 FPS Subframe Alpha Blending
+            if self.config.get("smooth_blend", True) and getattr(self, "next_frame_idx", 0) != self.frame_idx and self.gaze_dir == -1:
+                next_src_x = self.next_frame_idx * FRAME_WIDTH
+                next_source_rect = QRectF(next_src_x, src_y, FRAME_WIDTH, FRAME_HEIGHT)
+                sub_prog = getattr(self, "subframe_progress", 0.0)
+
+                painter.setOpacity(1.0 - (sub_prog * 0.45))
+                painter.drawImage(target_rect, self.spritesheet, source_rect)
+
+                painter.setOpacity(sub_prog * 0.45)
+                painter.drawImage(target_rect, self.spritesheet, next_source_rect)
+                painter.setOpacity(1.0)
+            else:
+                painter.drawImage(target_rect, self.spritesheet, source_rect)
 
             # 4b. Micro-Animationen: Errötende Bäckchen (Blush) beim Streicheln
             if now < self._blush_until:
@@ -2422,10 +2497,24 @@ class DesktopPetWindow(QWidget):
             self.pet_animal()
             event.accept()
 
+    def enterEvent(self, event):
+        self.is_hovered = True
+        super().enterEvent(event)
+
+    def leaveEvent(self, event):
+        self.is_hovered = False
+        super().leaveEvent(event)
+
     def keyPressEvent(self, event):
         key = event.key()
         if key == Qt.Key.Key_Space:
             self.pet_animal()
+            event.accept()
+        elif key == Qt.Key.Key_T:
+            self.start_dance()
+            event.accept()
+        elif key == Qt.Key.Key_S:
+            self.start_stretch()
             event.accept()
         elif key == Qt.Key.Key_F:
             self._feed_snack_action("sandwich")
@@ -2453,6 +2542,41 @@ class DesktopPetWindow(QWidget):
             event.accept()
         else:
             super().keyPressEvent(event)
+
+    def start_dance(self):
+        """Startet eine ausgelassene Party-Tanz Animation mit Konfetti"""
+        self.sfx.play("level_up")
+        self.current_anim = "party"
+        self.anim_start_time = time.time()
+        self._dance_end_time = time.time() + 5.5
+        line = random.choice([
+            "Party-Time! Du hast es gerockt! 🥳🎶",
+            "Schüttel das Coding-Tief ab! Dance-Break! 💃✨",
+            "Bester Entwickler der Welt! Wir feiern dich! 🎉🎈"
+        ])
+        self.speech_bubble_text = line
+        self.speech_bubble_timeout = time.time() + 4.5
+        self.voice.speak(line)
+        for _ in range(12):
+            self.add_particle(
+                random.choice(["🎉", "⭐", "✨", "🍬", "🎊", "🌈", "🎈"]),
+                random.choice([QColor(244, 63, 94), QColor(250, 204, 21), QColor(56, 189, 248), QColor(168, 85, 247)]),
+                offset_x=random.uniform(-30, 30),
+                offset_y=random.uniform(-10, 10)
+            )
+
+    def start_stretch(self):
+        """Ergonomische Dehn- und Streck-Animation"""
+        self.current_anim = "stretch"
+        self.anim_start_time = time.time()
+        self.sfx.play("happy")
+        line = "Und einmal gaaaanz weit nach oben strecken! Das tut gut! 🧘✨"
+        self.speech_bubble_text = line
+        self.speech_bubble_timeout = time.time() + 3.5
+        self.voice.speak(line)
+        self.add_particle("🧘", QColor(34, 197, 94))
+        self.add_particle("💪", QColor(250, 204, 21), offset_y=-12)
+        self.tamagotchi.take_break()
 
     def pet_animal(self):
         """Streicheln mit Schnurren, Herzexplosion und Affection Boost"""
@@ -2569,6 +2693,8 @@ class DesktopPetWindow(QWidget):
         # 2. Minispiele Submenü
         games_menu = menu.addMenu("🎮 Minispiele & Fun")
         games_menu.addAction("🎾 Ball werfen (Fangspiel)").triggered.connect(self._throw_ball_action)
+        games_menu.addAction("🥳 Party-Tanz (T)").triggered.connect(self.start_dance)
+        games_menu.addAction("🧘 Strecken & Dehnen (S)").triggered.connect(self.start_stretch)
         games_menu.addAction("🎲 Würfel werfen (1-6)").triggered.connect(self.roll_dice)
         games_menu.addAction("🥠 Glückskeks öffnen").triggered.connect(self.open_fortune_cookie)
 
@@ -2638,6 +2764,11 @@ class DesktopPetWindow(QWidget):
             act_s = scale_menu.addAction(f"{'✓ ' if abs(self.scale - s_val) < 0.05 else ''}{s_name}")
             act_s.triggered.connect(lambda ch, sv=s_val: self._set_scale(sv))
 
+        # 8b. Fluid 60 FPS Überblendung Toggle
+        smooth_val = self.config.get("smooth_blend", True)
+        smooth_act = menu.addAction(f"{'✓ ' if smooth_val else ''}✨ Fluid 60 FPS Überblendung")
+        smooth_act.triggered.connect(self._toggle_smooth_blend)
+
         menu.addSeparator()
 
         # 9. Einstellungen
@@ -2651,6 +2782,14 @@ class DesktopPetWindow(QWidget):
         act_exit.triggered.connect(self._exit_app)
 
         menu.exec(event.globalPos())
+
+    def _toggle_smooth_blend(self):
+        cur = self.config.get("smooth_blend", True)
+        self.config.set("smooth_blend", not cur)
+        status = "60 FPS Überblendung: Aktiviert! ✨" if not cur else "60 FPS Überblendung: Deaktiviert! ⏱️"
+        self.speech_bubble_text = status
+        self.speech_bubble_timeout = time.time() + 2.5
+        self.update()
 
     def _feed_snack_action(self, snack_type: str):
         msg, icon = self.tamagotchi.feed_snack(snack_type)
