@@ -49,7 +49,7 @@ from PyQt6.QtCore import (
 )
 from PyQt6.QtGui import (
     QPainter, QImage, QPixmap, QColor, QFont, QCursor, QAction, QActionGroup,
-    QPen, QBrush, QLinearGradient, QIcon
+    QPen, QBrush, QLinearGradient, QIcon, QPolygon
 )
 from PyQt6.QtWidgets import (
     QApplication, QWidget, QMenu, QDialog, QVBoxLayout, QHBoxLayout,
@@ -2050,13 +2050,6 @@ class DesktopPetWindow(QWidget):
             dst_x = (self.width() - dst_w) // 2 + gaze_off_x
             dst_y = self.hud_height + 25 + bounce_y + gaze_off_y
 
-            frame_crop = self.spritesheet.copy(src_x, src_y, FRAME_WIDTH, FRAME_HEIGHT)
-            scaled_frame = frame_crop.scaled(
-                dst_w, dst_h,
-                Qt.AspectRatioMode.KeepAspectRatio,
-                Qt.TransformationMode.SmoothTransformation
-            )
-
             # Schatten
             shadow_rect = QRectF(dst_x + 10, dst_y + dst_h - 10, dst_w - 20, 10)
             painter.setPen(Qt.PenStyle.NoPen)
@@ -2067,7 +2060,9 @@ class DesktopPetWindow(QWidget):
             if self.tamagotchi.is_sleeping:
                 painter.setOpacity(0.85)
 
-            painter.drawImage(dst_x, dst_y, scaled_frame)
+            target_rect = QRectF(dst_x, dst_y, dst_w, dst_h)
+            source_rect = QRectF(src_x, src_y, FRAME_WIDTH, FRAME_HEIGHT)
+            painter.drawImage(target_rect, self.spritesheet, source_rect)
             painter.setOpacity(1.0)
 
         # 5. Schwebende Partikel zeichnen
@@ -2169,6 +2164,14 @@ class DesktopPetWindow(QWidget):
         painter.setPen(QPen(QColor(0, 212, 255, 180), 1.5))
         painter.setBrush(QColor(15, 23, 42, 240))
         painter.drawRoundedRect(bubble_x, bubble_y, bubble_w, bubble_h, 10, 10)
+
+        # Comic Zeiger (Sprechblasen-Schwanz nach unten)
+        pointer = QPolygon([
+            QPoint(bubble_x + bubble_w // 2 - 6, bubble_y + bubble_h - 1),
+            QPoint(bubble_x + bubble_w // 2 + 6, bubble_y + bubble_h - 1),
+            QPoint(bubble_x + bubble_w // 2, bubble_y + bubble_h + 6)
+        ])
+        painter.drawPolygon(pointer)
 
         painter.setPen(QColor(255, 255, 255))
         text_rect = QRect(bubble_x + 8, bubble_y + 6, bubble_w - 16, bubble_h - 10)
