@@ -206,6 +206,38 @@ OFFLINE_NAG_LINES = {
         "Sanfte Landung! Schön hier oben!",
         "Positionswechsel erfolgreich! Ich behalte dich im Auge!",
         "Wo fliegen wir denn hin? CachyOS von oben sieht gut aus!"
+    ],
+    "pet": [
+        "Aww, das kitzelt! 🥰 Du bist der Beste!",
+        "Mmmh, Schnurr-Modus aktiviert! 🐾❤️",
+        "Das tut so gut nach harter Bildschirmarbeit! ✨",
+        "Kraulen erhöht die Arbeitsmoral um 200%! 🥰",
+        "Purrrr... Ich liebe unsere Desktop-Sessions! 💖"
+    ],
+    "dice_comments": {
+        1: "Puh, eine 1... Selbst die besten Entwickler müssen mal refactorn! 😅",
+        2: "Eine 2! Nicht schlecht, aber da geht noch mehr!",
+        3: "Eine solide 3! Die goldene Mitte des Codes!",
+        4: "Eine 4! Stabiler Build ohne Memory-Leaks!",
+        5: "Eine 5! Fast perfekt – nur noch ein kleiner Test!",
+        6: "Eine 6! BÄMM! Volltreffer! Heute gelingt dir alles! 🎉"
+    },
+    "fortune": [
+        "🥠 Weisheit des Tages: Dein nächster Git-Commit wird fehlerfrei durchlaufen!",
+        "🥠 Wer 5 Minuten Pause macht, baut 70% weniger Bugs ein!",
+        "🥠 Ein Schluck kaltes Wasser löst oft mehr Probleme als ein tiefer Stack-Trace!",
+        "🥠 Deine Tastatur ist dein Zauberstab. Behandle deine Finger gut!",
+        "🥠 Große Entwickler zeichnen sich durch Geduld, Pausen und frische Luft aus!"
+    ],
+    "system_alert": [
+        "Puh! Deine CPU kocht ja förmlich! 🔥 Lass uns dem Lüfter Beistand leisten!",
+        "System-Auslastung hoch! Da wird wohl gerade ordentlich gerechnet! 💻⚡",
+        "CPU schwitzt, Lüfter heulen – CachyOS gibt heute wirklich alles! 🚀"
+    ],
+    "ergonomics": [
+        "🧘 Ergonomie-Check: Schultern locker fallen lassen, Rücken strecken und tief durchatmen!",
+        "👁️ 20-20-20 Regel: Schau für 20 Sekunden auf einen Punkt in mindestens 6 Meter Entfernung!",
+        "🧘 Haltungskorrektur! Kein Rundrücken vorm Monitor, Brust raus, Kopf hoch!"
     ]
 }
 
@@ -218,7 +250,8 @@ class RetroSoundSynthesizer:
 
     CACHE_DIR = Path("/tmp/desktop_pet_sfx")
 
-    def __init__(self):
+    def __init__(self, config=None):
+        self.config = config
         self.CACHE_DIR.mkdir(parents=True, exist_ok=True)
         self._ensure_chimes()
 
@@ -271,7 +304,28 @@ class RetroSoundSynthesizer:
         if not p_pomo.exists():
             self._generate_wav(p_pomo, [392.0, 523.25], 0.30, 1.5, 0.5)
 
+        # 7. Purr / Schnurren Chime (sanfte Vibrato-Welle)
+        p_purr = self.CACHE_DIR / "purr.wav"
+        if not p_purr.exists():
+            self._generate_wav(p_purr, [220.0, 246.94, 261.63, 293.66, 329.63, 293.66, 261.63], 0.06, 1.8, 0.4)
+
+        # 8. Dice / Würfel-Tick
+        p_dice = self.CACHE_DIR / "dice.wav"
+        if not p_dice.exists():
+            self._generate_wav(p_dice, [440.0, 554.37, 659.25, 880.0], 0.035, 5.0, 0.4)
+
+        # 9. Fortune / Glückskeks Sparkle (C6 -> E6 -> G6 -> C7)
+        p_fortune = self.CACHE_DIR / "fortune.wav"
+        if not p_fortune.exists():
+            self._generate_wav(p_fortune, [1046.50, 1318.51, 1567.98, 2093.00], 0.10, 2.2, 0.45)
+
     def play(self, sfx_name: str, volume: float = 0.8):
+        if self.config:
+            if self.config.get("muted", False) or self.config.get("sfx_muted", False):
+                return
+            vol_cfg = self.config.get("volume", 85) / 100.0
+            volume = volume * vol_cfg
+
         wav_path = self.CACHE_DIR / f"{sfx_name}.wav"
         if wav_path.exists():
             threading.Thread(
@@ -406,8 +460,12 @@ class ConfigManager:
         "voice": "lola",
         "volume": 85,
         "muted": False,
+        "sfx_muted": False,
+        "voice_muted": False,
         "scale": 0.70,
         "hud_theme": "cyberpunk",
+        "active_skin": "yuyu-chibi",
+        "system_monitor": True,
         "roaming_enabled": True,
         "show_tamagotchi_hud": True,
         "nag_intensity": "frech",
@@ -545,7 +603,7 @@ class VoiceEngine(QObject):
             pass
 
     def speak(self, text: str, voice_override: Optional[str] = None):
-        if self.config.get("muted", False) or not text.strip():
+        if self.config.get("muted", False) or self.config.get("voice_muted", False) or not text.strip():
             return
 
         threading.Thread(
@@ -904,6 +962,11 @@ class TamagotchiEngine(QObject):
 
         return msg, icon
 
+    def increase_affection(self, amount: int = 10):
+        prog = self.config.data.setdefault("progression", {})
+        prog["affection"] = min(100, prog.get("affection", 50) + amount)
+        self.config.save()
+
     def take_break(self):
         self.energy = 100.0
         prog = self.config.data.setdefault("progression", {})
@@ -1235,9 +1298,17 @@ class SettingsDialog(QDialog):
         h_vol.addWidget(self.lbl_vol)
         ba_l.addLayout(h_vol)
 
-        self.chk_mute = QCheckBox("Sprachausgabe komplett stummschalten (Mute)")
-        self.chk_mute.setChecked(self.config.get("muted", False))
+        self.chk_mute = QCheckBox("Sprachausgabe komplett stummschalten (Voice Mute)")
+        self.chk_mute.setChecked(self.config.get("muted", False) or self.config.get("voice_muted", False))
         ba_l.addWidget(self.chk_mute)
+
+        self.chk_mute_sfx = QCheckBox("Retro-Soundeffekte (Chimes / SFX) stummschalten")
+        self.chk_mute_sfx.setChecked(self.config.get("sfx_muted", False))
+        ba_l.addWidget(self.chk_mute_sfx)
+
+        self.chk_system_monitor = QCheckBox("Hardware- & CPU-Last-Wächter aktivieren (Hitzewarnung)")
+        self.chk_system_monitor.setChecked(self.config.get("system_monitor", True))
+        ba_l.addWidget(self.chk_system_monitor)
 
         l.addWidget(box_audio)
         l.addStretch()
@@ -1502,6 +1573,9 @@ class SettingsDialog(QDialog):
         self.config.data["base_url"] = self.txt_base_url.text().strip()
         self.config.data["volume"] = self.slider_vol.value()
         self.config.data["muted"] = self.chk_mute.isChecked()
+        self.config.data["voice_muted"] = self.chk_mute.isChecked()
+        self.config.data["sfx_muted"] = self.chk_mute_sfx.isChecked()
+        self.config.data["system_monitor"] = self.chk_system_monitor.isChecked()
         self.config.data["show_tamagotchi_hud"] = self.chk_hud.isChecked()
         self.config.data["roaming_enabled"] = self.chk_roam.isChecked()
         self.config.data["hud_theme"] = self.combo_theme.currentData()
@@ -1577,6 +1651,7 @@ class DesktopPetWindow(QWidget):
         self.speech_bubble_text = ""
         self.speech_bubble_timeout = 0.0
         self.audio_level = 0.0
+        self._last_system_check = time.time()
 
         # Signale verbinden
         self.voice.speech_started.connect(self._on_speech_started)
@@ -1598,7 +1673,63 @@ class DesktopPetWindow(QWidget):
         # System Tray Icon (KDE Plasma Taskleiste)
         self._init_tray_icon()
 
+    def get_available_skins(self) -> Dict[str, Dict[str, Any]]:
+        skins = {}
+        script_dir = Path(__file__).resolve().parent
+        search_dirs = [
+            script_dir / "pets",
+            Path.home() / ".local" / "share" / "webjarvis_petaddon" / "pets",
+            Path("/home/graba/Downloads/driver-and tools")
+        ]
+        for sdir in search_dirs:
+            if not sdir.exists():
+                continue
+            for item in sdir.iterdir():
+                if item.is_dir():
+                    sheet = item / "spritesheet.webp"
+                    if sheet.exists():
+                        skin_id = item.name
+                        meta_file = item / "pet.json"
+                        name = skin_id.replace("-", " ").title()
+                        desc = ""
+                        if meta_file.exists():
+                            try:
+                                with open(meta_file, "r", encoding="utf-8") as f:
+                                    meta = json.load(f)
+                                    name = meta.get("displayName", name)
+                                    desc = meta.get("description", "")
+                            except Exception:
+                                pass
+                        skins[skin_id] = {
+                            "name": name,
+                            "desc": desc,
+                            "path": sheet
+                        }
+        return skins
+
+    def switch_skin(self, skin_id: str):
+        skins = self.get_available_skins()
+        if skin_id in skins:
+            sheet_path = skins[skin_id]["path"]
+            new_img = QImage(str(sheet_path))
+            if not new_img.isNull():
+                self.spritesheet = new_img
+                self.config.set("active_skin", skin_id)
+                self.sfx.play("level_up")
+                self.add_particle("✨", QColor(250, 204, 21))
+                self.speech_bubble_text = f"Neuer Skin aktiv: {skins[skin_id]['name']}!"
+                self.speech_bubble_timeout = time.time() + 3.0
+                self._init_tray_icon()
+                self.update()
+
     def _load_spritesheet(self):
+        skins = self.get_available_skins()
+        active = self.config.get("active_skin", "yuyu-chibi")
+        if active in skins:
+            self.spritesheet = QImage(str(skins[active]["path"]))
+            print(f"[DesktopPet] Aktiver Skin '{active}' geladen: {skins[active]['path']}")
+            return
+
         script_dir = Path(__file__).resolve().parent
         candidate_paths = [
             script_dir / "pets" / "yuyu-chibi" / "spritesheet.webp",
@@ -1713,6 +1844,11 @@ class DesktopPetWindow(QWidget):
         # Zzz Partikel im Schlafmodus
         if self.tamagotchi.is_sleeping and random.random() < 0.035:
             self.add_particle("Zzz...", QColor(96, 165, 250), offset_x=random.uniform(-15, 15))
+
+        # System Load Watcher (alle 15 Sekunden prüfen)
+        if now - self._last_system_check > 15.0:
+            self._last_system_check = now
+            self._check_system_health()
 
         # 2. Ball-Fangspiel Physik & Pet-Tracking
         if self.ball_game.active:
@@ -2116,6 +2252,77 @@ class DesktopPetWindow(QWidget):
                     self.voice.speak(click_line)
             event.accept()
 
+    def mouseDoubleClickEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton:
+            self.pet_animal()
+            event.accept()
+
+    def pet_animal(self):
+        """Streicheln mit Schnurren, Herzexplosion und Affection Boost"""
+        self.sfx.play("purr")
+        for _ in range(5):
+            self.add_particle(random.choice(["💖", "💕", "✨", "🐾"]), QColor(244, 63, 94))
+        self.config.add_xp(15)
+        self.tamagotchi.increase_affection(10)
+        self.current_anim = "waving"
+        self.anim_start_time = time.time()
+        pet_line = random.choice(OFFLINE_NAG_LINES["pet"])
+        self.speech_bubble_text = pet_line
+        self.speech_bubble_timeout = time.time() + 3.5
+        self.voice.speak(pet_line)
+
+    def roll_dice(self):
+        """Würfelt eine Zahl von 1 bis 6 mit Soundeffekt und witzigem Kommentar"""
+        self.sfx.play("dice")
+        roll = random.randint(1, 6)
+        dice_emojis = {1: "⚀", 2: "⚁", 3: "⚂", 4: "⚃", 5: "⚄", 6: "⚅"}
+        comment = OFFLINE_NAG_LINES["dice_comments"].get(roll, "")
+        line = f"Würfel geworfen: Eine {roll}! {comment}"
+        self.speech_bubble_text = line
+        self.speech_bubble_timeout = time.time() + 4.0
+        self.add_particle(dice_emojis.get(roll, "🎲"), QColor(250, 204, 21))
+        self.config.add_xp(10)
+        self.voice.speak(line)
+
+    def open_fortune_cookie(self):
+        """Öffnet einen Glückskeks mit magischem Glöckchen und Weisheit"""
+        self.sfx.play("fortune")
+        wisdom = random.choice(OFFLINE_NAG_LINES["fortune"])
+        self.speech_bubble_text = wisdom
+        self.speech_bubble_timeout = time.time() + 4.5
+        self.add_particle("🥠", QColor(251, 191, 36))
+        self.add_particle("✨", QColor(250, 204, 21), offset_y=-12)
+        self.config.add_xp(10)
+        self.voice.speak(wisdom)
+
+    def ergonomics_check(self):
+        """Ergonomie- und Haltungs-Check mit Haltungs-Korrektur"""
+        self.sfx.play("happy")
+        advice = random.choice(OFFLINE_NAG_LINES["ergonomics"])
+        self.speech_bubble_text = advice
+        self.speech_bubble_timeout = time.time() + 4.5
+        self.add_particle("🧘", QColor(34, 197, 94))
+        self.add_particle("👁️", QColor(56, 189, 248), offset_y=-12)
+        self.tamagotchi.energy = min(100.0, self.tamagotchi.energy + 10.0)
+        self.config.add_xp(10)
+        self.voice.speak(advice)
+
+    def _check_system_health(self):
+        if not self.config.get("system_monitor", True) or self.tamagotchi.is_sleeping:
+            return
+        try:
+            load1 = os.getloadavg()[0]
+            cpus = os.cpu_count() or 1
+            if (load1 / cpus) > 1.5 and not self.voice.is_speaking():
+                line = random.choice(OFFLINE_NAG_LINES["system_alert"])
+                self.speech_bubble_text = line
+                self.speech_bubble_timeout = time.time() + 4.0
+                self.add_particle("💦", QColor(56, 189, 248))
+                self.add_particle("🔥", QColor(239, 68, 68), offset_y=-15)
+                self.voice.speak(line)
+        except Exception:
+            pass
+
     # ==========================================================================
     # RECHTSKLICK KONTEXTMENÜ
     # ==========================================================================
@@ -2154,16 +2361,29 @@ class DesktopPetWindow(QWidget):
         snack_menu.addAction("🥤 Frisches Glas Wasser (+50% Hydration)").triggered.connect(lambda: self._feed_snack_action("water"))
         snack_menu.addAction("🍩 Süßer Donut (+30% Hunger, +10 Zuneigung)").triggered.connect(lambda: self._feed_snack_action("donut"))
 
-        act_break = menu.addAction("🧘 Bildschirmpause machen & Dehnen (+100%)")
-        act_break.triggered.connect(self._take_break_action)
+        # Streicheln & Ergonomie Direktaktionen
+        menu.addAction("💖 Streicheln & Kraulen (+15 XP)").triggered.connect(self.pet_animal)
+        menu.addAction("🧘 Bildschirmpause machen & Dehnen (+100%)").triggered.connect(self._take_break_action)
+        menu.addAction("👁️ Ergonomie- & Haltungs-Check").triggered.connect(self.ergonomics_check)
 
         menu.addSeparator()
 
-        # 2. Interaktives Ballspiel
-        act_ball = menu.addAction("🎾 Ball werfen (Fangspiel)")
-        act_ball.triggered.connect(self._throw_ball_action)
+        # 2. Minispiele Submenü
+        games_menu = menu.addMenu("🎮 Minispiele & Fun")
+        games_menu.addAction("🎾 Ball werfen (Fangspiel)").triggered.connect(self._throw_ball_action)
+        games_menu.addAction("🎲 Würfel werfen (1-6)").triggered.connect(self.roll_dice)
+        games_menu.addAction("🥠 Glückskeks öffnen").triggered.connect(self.open_fortune_cookie)
 
-        # 3. Pomodoro Fokus
+        # 3. Pet-Skin Wechsler
+        available_skins = self.get_available_skins()
+        if available_skins:
+            skin_menu = menu.addMenu("🎭 Pet-Skin wechseln")
+            cur_skin = self.config.get("active_skin", "yuyu-chibi")
+            for sk_id, s_info in available_skins.items():
+                act_sk = skin_menu.addAction(f"{'✓ ' if sk_id == cur_skin else ''}{s_info['name']}")
+                act_sk.triggered.connect(lambda ch, sid=sk_id: self.switch_skin(sid))
+
+        # 4. Pomodoro Fokus
         if self.pomodoro.mode == "OFF":
             act_pomo = menu.addAction("🍅 Pomodoro Fokus starten (25 Min)")
             act_pomo.triggered.connect(lambda: self.pomodoro.start_focus(25))
@@ -2171,16 +2391,25 @@ class DesktopPetWindow(QWidget):
             act_pomo = menu.addAction(f"⏹️ Pomodoro stoppen ({self.pomodoro.seconds_left // 60}m verbleibend)")
             act_pomo.triggered.connect(self.pomodoro.stop)
 
-        # 4. Schlaf- & Nachtmodus (DND)
+        # 5. Schlaf- & Nachtmodus (DND)
         sleep_text = "⏰ Aufwecken" if self.tamagotchi.is_sleeping else "💤 Schlafen legen (Zzz... DND)"
         act_sleep = menu.addAction(sleep_text)
         act_sleep.triggered.connect(self._toggle_sleep_action)
 
-        # 5. Haftnotiz (Sticky Note)
+        # 6. Haftnotiz (Sticky Note)
         cur_note = self.config.get("sticky_note", "")
         note_text = f"📝 Haftnotiz bearbeiten ({cur_note[:12]}...)" if cur_note else "📝 Haftnotiz anheften (Memo)..."
         act_note = menu.addAction(note_text)
         act_note.triggered.connect(self._edit_sticky_note)
+
+        # 7. Audio-Einstellungen Submenü
+        audio_menu = menu.addMenu("🔊 Sound & Audio")
+        sfx_muted = self.config.get("sfx_muted", False)
+        voice_muted = self.config.get("voice_muted", False)
+        act_mute_sfx = audio_menu.addAction(f"{'✓ SFX stumm' if sfx_muted else 'SFX stummschalten'}")
+        act_mute_sfx.triggered.connect(self._toggle_sfx_mute)
+        act_mute_voice = audio_menu.addAction(f"{'✓ Sprache stumm' if voice_muted else 'Sprache stummschalten'}")
+        act_mute_voice.triggered.connect(self._toggle_voice_mute)
 
         menu.addSeparator()
 
@@ -2254,6 +2483,22 @@ class DesktopPetWindow(QWidget):
             self.speech_bubble_text = "Gute Nacht... Zzz..."
             self.speech_bubble_timeout = time.time() + 2.5
             self.current_anim = "idle"
+        self.update()
+
+    def _toggle_sfx_mute(self):
+        new_val = not self.config.get("sfx_muted", False)
+        self.config.set("sfx_muted", new_val)
+        status = "SFX stummgeschaltet! 🔇" if new_val else "SFX Soundeffekte aktiviert! 🔊"
+        self.speech_bubble_text = status
+        self.speech_bubble_timeout = time.time() + 2.5
+        self.update()
+
+    def _toggle_voice_mute(self):
+        new_val = not self.config.get("voice_muted", False)
+        self.config.set("voice_muted", new_val)
+        status = "Sprache stummgeschaltet! 🔇" if new_val else "Sprachausgabe aktiviert! 🎙️"
+        self.speech_bubble_text = status
+        self.speech_bubble_timeout = time.time() + 2.5
         self.update()
 
     def _change_voice_quick(self, voice_key: str):
@@ -2331,6 +2576,10 @@ def main():
     parser.add_argument("--feed", nargs="?", const="sandwich", choices=["sandwich", "apple", "coffee", "water", "donut"], help="Füttert das Pet mit einem Snack")
     parser.add_argument("--drink", action="store_true", help="Gibt dem Pet ein Glas Wasser (+50%% Hydration)")
     parser.add_argument("--break", dest="take_break", action="store_true", help="Markiert eine Bildschirmpause als erledigt")
+    parser.add_argument("--pet", action="store_true", help="Streichelt das Pet (+15 XP, +10 Zuneigung)")
+    parser.add_argument("--dice", action="store_true", help="Würfelt eine Zahl von 1 bis 6")
+    parser.add_argument("--fortune", action="store_true", help="Zieht einen inspirierenden Entwickler-Glückskeks")
+    parser.add_argument("--skins", action="store_true", help="Listet alle gefundenen Pet-Skins auf")
     parser.add_argument("--say", type=str, help="Lässt das Pet eine Sprachnachricht vorlesen")
     args, unknown = parser.parse_known_args()
 
@@ -2340,8 +2589,59 @@ def main():
         print_cli_status(config)
         return
 
+    if args.skins:
+        print("\033[1;36m🐾 Verfügbare Pet-Skins:\033[0m")
+        script_dir = Path(__file__).resolve().parent
+        search_dirs = [
+            script_dir / "pets",
+            Path.home() / ".local" / "share" / "webjarvis_petaddon" / "pets",
+            Path("/home/graba/Downloads/driver-and tools")
+        ]
+        cur_skin = config.get("active_skin", "yuyu-chibi")
+        seen_skins = {}
+        for sdir in search_dirs:
+            if not sdir.exists():
+                continue
+            for item in sdir.iterdir():
+                if item.is_dir() and (item / "spritesheet.webp").exists() and item.name not in seen_skins:
+                    seen_skins[item.name] = item / "spritesheet.webp"
+
+        for sname, spath in seen_skins.items():
+            active_marker = " \033[1;32m[AKTIV]\033[0m" if sname == cur_skin else ""
+            print(f"  • \033[1;33m{sname}\033[0m{active_marker} ({spath})")
+        if not seen_skins:
+            print("  (Keine separaten Skins gefunden, Fallback aktiv)")
+        return
+
+    if args.pet:
+        sfx = RetroSoundSynthesizer(config)
+        sfx.play("purr")
+        config.add_xp(15)
+        prog = config.data.setdefault("progression", {})
+        prog["affection"] = min(100, prog.get("affection", 50) + 10)
+        config.save()
+        pet_line = random.choice(OFFLINE_NAG_LINES["pet"])
+        print(f"💖 {pet_line} (+15 XP, Zuneigung: {prog['affection']}%)")
+        return
+
+    if args.dice:
+        sfx = RetroSoundSynthesizer(config)
+        sfx.play("dice")
+        roll = random.randint(1, 6)
+        dice_emojis = {1: "⚀", 2: "⚁", 3: "⚂", 4: "⚃", 5: "⚄", 6: "⚅"}
+        comment = OFFLINE_NAG_LINES["dice_comments"].get(roll, "")
+        print(f"🎲 {dice_emojis.get(roll, '🎲')} Gewürfelt: {roll}! {comment}")
+        return
+
+    if args.fortune:
+        sfx = RetroSoundSynthesizer(config)
+        sfx.play("fortune")
+        wisdom = random.choice(OFFLINE_NAG_LINES["fortune"])
+        print(wisdom)
+        return
+
     if args.feed:
-        sfx = RetroSoundSynthesizer()
+        sfx = RetroSoundSynthesizer(config)
         voice = VoiceEngine(config, sfx)
         llm = LLMEngine(config)
         tamagotchi = TamagotchiEngine(config, llm, voice, sfx)
@@ -2350,7 +2650,7 @@ def main():
         return
 
     if args.drink:
-        sfx = RetroSoundSynthesizer()
+        sfx = RetroSoundSynthesizer(config)
         voice = VoiceEngine(config, sfx)
         llm = LLMEngine(config)
         tamagotchi = TamagotchiEngine(config, llm, voice, sfx)
@@ -2359,7 +2659,7 @@ def main():
         return
 
     if args.take_break:
-        sfx = RetroSoundSynthesizer()
+        sfx = RetroSoundSynthesizer(config)
         voice = VoiceEngine(config, sfx)
         llm = LLMEngine(config)
         tamagotchi = TamagotchiEngine(config, llm, voice, sfx)
@@ -2368,7 +2668,7 @@ def main():
         return
 
     if args.say:
-        sfx = RetroSoundSynthesizer()
+        sfx = RetroSoundSynthesizer(config)
         voice = VoiceEngine(config, sfx)
         print(f"🗣️ Spreche: „{args.say}“...")
         voice.speak(args.say)
@@ -2379,7 +2679,7 @@ def main():
     app.setApplicationName("DesktopPetCompanion")
     app.setQuitOnLastWindowClosed(False)
 
-    sfx = RetroSoundSynthesizer()
+    sfx = RetroSoundSynthesizer(config)
     voice = VoiceEngine(config, sfx)
     llm = LLMEngine(config)
     tamagotchi = TamagotchiEngine(config, llm, voice, sfx)

@@ -1,4 +1,4 @@
-# 🐾 Desktop Pet & Tamagotchi AI Companion v2.5 (OpenPets Mini Core)
+# 🐾 Desktop Pet & Tamagotchi AI Companion v2.6 (OpenPets Mini Core)
 
 [🇩🇪 Switch to German Documentation](README_DE.md) | [🇬🇧 English Documentation](README.md)
 
@@ -6,13 +6,27 @@ An interactive, animated **100% standalone Linux Desktop Companion** and **Tamag
 
 ---
 
-## ✨ Features & New Highlights (v2.5)
+## ✨ Features & New Highlights (v2.6)
 
 - **🖥️ 100% Standalone Desktop Companion**: Completely independent PyQt6 application running floating on your desktop – no web browser or external servers needed.
+- **💖 Interactive Petting & Purring Engine**:
+  - Double-click or select *💖 Streicheln & Kraulen*: Yuyu purrs with custom audio (`purr.wav`), displays happy hearts particles, and gains +15 XP & +10 Affection.
+- **🎮 Minigames & Fun**:
+  - 🎾 **Interactive Ball Game (Fetch)**: Throw a tennis ball across your desktop with realistic gravity; Yuyu chases, catches it, and celebrates.
+  - 🎲 **Dice Roll (1-6)**: Roll the dice with sound effects and witty developer commentary.
+  - 🥠 **Developer Fortune Cookie**: Open a fortune cookie with chime sound and humorous coding wisdom.
+- **🎭 Multi-Skin Manager & Skin Switcher**:
+  - Drop custom pet folders into `pets/` or `~/.local/share/webjarvis_petaddon/pets/`.
+  - Switch skins instantly from the right-click menu without restarting.
+  - Check skins via CLI: `desktop-pet --skins`.
+- **🧘 Ergonomics & Posture Coach**:
+  - Quick reminder for posture correction, shoulder relaxation, and the 20-20-20 eye strain rule.
+- **💻 Hardware & CPU Load Watcher**:
+  - Monitors high system load (compiles, renders) and prompts humorous alerts with sweat drops (`💦`) to cool down.
 - **🤖 Universal LLM Support via API Key**:
   - Works with **Google Gemini**, **OpenAI**, **Groq**, **OpenRouter**, **Ollama**, or any custom Base URL.
   - Auto-detects key prefixes (`AIzaSy...`, `sk-...`, `gsk_...`).
-  - **Offline Resilience:** Runs completely offline without API keys using 40+ handcrafted hilarious German & English lines.
+  - **Offline Resilience:** Runs completely offline without API keys using 50+ handcrafted hilarious German lines.
 - **🎙️ 4 Distinct Character Voices**:
   1. 👧 **Lola**: Female, energetic, bubbly & cheeky (Pitch 1.28)
   2. 👦 **Buster**: Male, sarcastic, snappy & dynamic (Pitch 0.95)
@@ -26,14 +40,12 @@ An interactive, animated **100% standalone Linux Desktop Companion** and **Tamag
     - ⚡ **Energy / Screen Break** (0 - 100%, prevents burnout and eye strain)
     - 📅 **Next Appointment & Countdown**
   - **Color-coded:** Green (>50%) ➔ Yellow (25-50%) ➔ Urgent Red (<25%).
-- **🎾 Interactive Fetch Ball Game**:
-  - Right-click ➔ *🎾 Throw Ball*: A tennis ball bounces with real desktop gravity! Yuyu chases the ball, jumps joyfully to catch it, plays a celebratory chime, and earns friendship XP!
 - **💤 Deep Sleep & DND Night Mode**:
   - Right-click ➔ *💤 Put to sleep (Zzz...)*: Yuyu curls up peacefully with floating `Zzz...` particles. In sleep mode, all nagging alarms are muted for distraction-free focus or resting.
 - **🍅 Integrated Pomodoro Focus Coach**:
   - Built-in Pomodoro timer in the HUD (25 min focus / 5 min break) with cheer-on phrases and break notifications.
 - **⭐ RPG Progression & Level-Up System**:
-  - Earn XP for drinking water (+25 XP), taking screen breaks (+35 XP), eating snacks, and playing fetch!
+  - Earn XP for drinking water (+25 XP), taking screen breaks (+35 XP), eating snacks, petting (+15 XP), and playing fetch!
   - Level up from *Rookie* to *Soulmate*!
 - **🍽️ Snack-Bar (5 Interactive Snacks)**:
   - 🥪 *Sandwich / Meal* (+50% Hunger)
@@ -42,7 +54,8 @@ An interactive, animated **100% standalone Linux Desktop Companion** and **Tamag
   - 🥤 *Fresh Glass of Water* (+50% Hydration)
   - 🍩 *Sweet Donut* (+30% Hunger, +10 Affection)
 - **🎵 Pure Python Retro Sound Effects (SFX)**:
-  - Built-in synthesizer without external dependencies (happy arpeggios, fanfare level-ups, alert chimes, sleep lullaby, pomodoro bell).
+  - Built-in synthesizer without external dependencies: 9 chimes (*Happy, Level-Up, Alert, Ball-Catch, Sleep, Pomodoro, Purr, Dice, Fortune*).
+  - Separate toggles to mute SFX and Voice in menus and settings.
 - **🎨 4 Selectable HUD Themes**:
   - 🔵 **Cyberpunk Neon** (Cyan & Deep Blue)
   - 🟢 **Gameboy Retro** (Vintage Matrix Green)
@@ -59,8 +72,13 @@ An interactive, animated **100% standalone Linux Desktop Companion** and **Tamag
 - **🎨 Anti-Aliased Bilinear Rendering & Wayland Support**:
   - Smooth bilinear texture sampling (`SmoothTransformation`) without pixelation.
   - Enforces `QT_QPA_PLATFORM=xcb` (XWayland) for unrestricted `move()`, roaming and drag & drop on KDE Plasma Wayland.
-- **👁️ 16-Sector Gaze Tracking**: Looks curiously towards your desktop mouse cursor.
-- **🚶 Autonomous Roaming**: Strolls along the bottom of your screen.
+- **⚡ Full Terminal CLI Control**:
+  - `desktop-pet --status` (Show status dashboard in CLI)
+  - `desktop-pet --pet` (Pet the companion)
+  - `desktop-pet --dice` (Roll dice)
+  - `desktop-pet --fortune` (Read fortune cookie)
+  - `desktop-pet --skins` (List available skins)
+  - `desktop-pet --feed [snack]` / `--drink` / `--break` / `--say "Text"`
 
 ---
 

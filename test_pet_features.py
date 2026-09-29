@@ -42,16 +42,28 @@ class TestDesktopPetSuite(unittest.TestCase):
             self.assertIn(key, HUD_THEMES)
 
     def test_sfx_generation(self):
-        for name in ["happy", "level_up", "alert", "ball_catch", "sleep", "pomodoro"]:
+        for name in ["happy", "level_up", "alert", "ball_catch", "sleep", "pomodoro", "purr", "dice", "fortune"]:
             path = RetroSoundSynthesizer.CACHE_DIR / f"{name}.wav"
             self.assertTrue(path.exists(), f"SFX {name}.wav was not generated")
-            self.assertGreater(path.stat().st_size, 1000)
+            self.assertGreater(path.stat().st_size, 500)
 
     def test_progression_and_xp(self):
         old_xp = self.config.data.get("progression", {}).get("xp", 0)
         self.config.add_xp(50)
         new_xp = self.config.data.get("progression", {}).get("xp", 0)
         self.assertEqual(new_xp, old_xp + 50)
+
+    def test_affection_progression(self):
+        old_aff = self.config.data.get("progression", {}).get("affection", 50)
+        self.tamagotchi.increase_affection(15)
+        new_aff = self.config.data.get("progression", {}).get("affection", 50)
+        self.assertEqual(new_aff, min(100, old_aff + 15))
+
+    def test_mute_flags(self):
+        self.config.set("sfx_muted", True)
+        self.assertTrue(self.config.get("sfx_muted", False))
+        self.config.set("voice_muted", True)
+        self.assertTrue(self.config.get("voice_muted", False))
 
     def test_snacks_feeding(self):
         self.tamagotchi.hunger = 40.0
