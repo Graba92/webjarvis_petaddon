@@ -199,6 +199,27 @@ ACTION_ANIMATIONS = {
     },
 }
 
+# Kätzchen-Begleiter Animationen (Katze_zubehör.webp - 1696x2528 Grid)
+KITTY_ANIMATIONS = {
+    "idle": {"row": 3, "start_col": 0, "frames": 3, "duration_ms": 2800, "loop": True},
+    "walk_right": {"row": 2, "start_col": 0, "frames": 4, "duration_ms": 800, "loop": True},
+    "walk_left": {"row": 2, "start_col": 4, "frames": 4, "duration_ms": 800, "loop": True},
+    "sleep": {"row": 0, "start_col": 2, "frames": 2, "duration_ms": 3200, "loop": True},
+    "play_yarn": {"row": 4, "start_col": 0, "frames": 4, "duration_ms": 1600, "loop": True},
+    "groom": {"row": 5, "start_col": 0, "frames": 4, "duration_ms": 2200, "loop": True},
+}
+
+# Isometrische Cozy Rooms Definitionen (props/zimmer*.webp)
+ROOM_DEFINITIONS = [
+    {"id": "zimmer5", "name": "🎮 Cyber Gaming Lounge (Neon & Dual-Screen)", "file": "zimmer5.webp"},
+    {"id": "zimmer6_xxx", "name": "✨ Cozy Pastel Studio (Lichterkette & Plüsch)", "file": "zimmer6_xxx.webp"},
+    {"id": "zimmer2", "name": "🛋️ Warm Loft & Relax Corner", "file": "zimmer2.webp"},
+    {"id": "zimmer3", "name": "🧸 Chill Oasis & Bookshelf", "file": "zimmer3.webp"},
+    {"id": "zimmer4", "name": "🌆 Sunset Studio & Retro Desk", "file": "zimmer4.webp"},
+    {"id": "zimmer", "name": "🌸 Chibi Dream Bedroom", "file": "zimmer.webp"},
+]
+
+
 
 # 4 Auswählbare Stimmen
 VOICES = {
@@ -1726,6 +1747,251 @@ class SettingsDialog(QDialog):
 
 
 # ==============================================================================
+# 9b. COZY ROOM SIMULATOR (ISOMETRISCHE ZIMMER & AMBIENTE)
+# ==============================================================================
+class CozyRoomCanvas(QWidget):
+    """Zeichenfläche für den Cozy Room Simulator mit animierten Chibis & Partikeln"""
+    def __init__(self, parent_window):
+        super().__init__()
+        self.room_window = parent_window
+        self.show_yuyu = True
+        self.sparkles = []
+        for _ in range(18):
+            self.sparkles.append({
+                "x": random.random(),
+                "y": random.random(),
+                "size": random.uniform(2.5, 5.5),
+                "speed": random.uniform(0.003, 0.009),
+                "phase": random.uniform(0, math.pi * 2)
+            })
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+        painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, True)
+
+        cur_room = ROOM_DEFINITIONS[self.room_window.current_room_idx]
+        room_img = self.room_window.room_images.get(cur_room["id"])
+
+        w = self.width()
+        h = self.height()
+
+        if room_img and not room_img.isNull():
+            scaled_img = room_img.scaled(w, h, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
+            ix = (w - scaled_img.width()) // 2
+            iy = (h - scaled_img.height()) // 2
+            painter.drawImage(ix, iy, scaled_img)
+        else:
+            painter.fillRect(0, 0, w, h, QColor(15, 23, 42))
+            painter.setPen(QColor(148, 163, 184))
+            painter.setFont(QFont("sans-serif", 12))
+            painter.drawText(QRect(0, 0, w, h), Qt.AlignmentFlag.AlignCenter, f"Zimmer '{cur_room['name']}' wird geladen...")
+
+        # Sanfte schwebende Lichtstaub-Partikel (Ambient Warm Lighting)
+        now = time.time()
+        for sp in self.sparkles:
+            sp["y"] -= sp["speed"]
+            if sp["y"] < 0:
+                sp["y"] = 1.0
+                sp["x"] = random.random()
+            sx = int(sp["x"] * w)
+            sy = int(sp["y"] * h)
+            glow = (math.sin(now * 2.5 + sp["phase"]) + 1.0) / 2.0
+            alpha = int(glow * 140) + 40
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(QColor(255, 240, 200, alpha))
+            painter.drawEllipse(QPointF(sx, sy), sp["size"], sp["size"])
+
+        # Wenn aktiv: Chibi Yuyu und Kätzchen gemütlich im Zimmer einblenden
+        if self.show_yuyu and self.room_window.pet_window:
+            pet = self.room_window.pet_window
+            if pet.spritesheet and not pet.spritesheet.isNull():
+                yw = 110
+                yh = 120
+                yx = int(w * 0.50 - yw / 2)
+                yy = int(h * 0.65 - yh / 2)
+
+                # Weicher Teppich-Schatten
+                painter.setPen(Qt.PenStyle.NoPen)
+                painter.setBrush(QColor(0, 0, 0, 70))
+                painter.drawEllipse(QRectF(yx + 12, yy + yh - 12, yw - 24, 12))
+
+                # Sprite aus dem Idle Frame
+                anim_cfg = ANIMATIONS.get("idle", {"row": 0, "frames": 4})
+                f_idx = pet.frame_idx % anim_cfg["frames"]
+                src_rect = QRectF(f_idx * FRAME_WIDTH, anim_cfg["row"] * FRAME_HEIGHT, FRAME_WIDTH, FRAME_HEIGHT)
+                dst_rect = QRectF(yx, yy, yw, yh)
+                painter.drawImage(dst_rect, pet.spritesheet, src_rect)
+
+                # Kätzchen neben Yuyu
+                if "kitty" in pet.prop_sheets:
+                    k_img = pet.prop_sheets["kitty"]
+                    k_cw = k_img.width() // 8
+                    k_ch = int(k_img.height() / 11.0)
+                    k_cfg = KITTY_ANIMATIONS.get("groom", KITTY_ANIMATIONS["idle"])
+                    k_col = k_cfg["start_col"] + (pet.kitty_frame_idx % k_cfg["frames"])
+                    k_src = QRectF(k_col * k_cw, k_cfg["row"] * k_ch, k_cw, k_ch)
+                    kw = 55
+                    kh = 58
+                    kx = yx + yw - 14
+                    ky = yy + yh - kh + 4
+
+                    painter.setBrush(QColor(0, 0, 0, 60))
+                    painter.drawEllipse(QRectF(kx + 6, ky + kh - 6, kw - 12, 6))
+                    painter.drawImage(QRectF(kx, ky, kw, kh), k_img, k_src)
+
+
+class CozyRoomWindow(QWidget):
+    """Interaktiver Cozy Room Simulator (Codex V2 Isometric Rooms)"""
+    def __init__(self, props_dir: Path, pet_window=None):
+        super().__init__()
+        self.props_dir = props_dir
+        self.pet_window = pet_window
+        self.current_room_idx = 0
+        self.room_images = {}
+        self._load_rooms()
+
+        self.setWindowTitle("🏠 Yuyus Zimmer - Cozy Room Simulator")
+        self.resize(780, 780)
+        self.setStyleSheet("""
+            QWidget {
+                background-color: #0b0f19;
+                color: #e2e8f0;
+                font-family: sans-serif;
+            }
+        """)
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(14, 12, 14, 14)
+        layout.setSpacing(10)
+
+        # Header Control Bar
+        bar = QHBoxLayout()
+        self.btn_prev = QPushButton("◀ Vorheriges")
+        self.btn_prev.setStyleSheet("""
+            QPushButton {
+                background-color: #1e293b;
+                color: #e2e8f0;
+                border: 1px solid #334155;
+                border-radius: 6px;
+                padding: 6px 14px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #00d4ff;
+                color: #050b14;
+            }
+        """)
+        self.btn_prev.clicked.connect(self.prev_room)
+
+        self.combo_rooms = QComboBox()
+        self.combo_rooms.setStyleSheet("""
+            QComboBox {
+                background-color: #1e293b;
+                color: #00d4ff;
+                border: 1px solid #00d4ff;
+                border-radius: 6px;
+                padding: 6px 14px;
+                font-weight: bold;
+                min-width: 320px;
+            }
+            QComboBox QAbstractItemView {
+                background-color: #0f172a;
+                color: #e2e8f0;
+                selection-background-color: #00d4ff;
+                selection-color: #050b14;
+            }
+        """)
+        for r in ROOM_DEFINITIONS:
+            self.combo_rooms.addItem(r["name"], r["id"])
+        self.combo_rooms.currentIndexChanged.connect(self._on_combo_changed)
+
+        self.btn_next = QPushButton("Nächstes ▶")
+        self.btn_next.setStyleSheet("""
+            QPushButton {
+                background-color: #1e293b;
+                color: #e2e8f0;
+                border: 1px solid #334155;
+                border-radius: 6px;
+                padding: 6px 14px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #00d4ff;
+                color: #050b14;
+            }
+        """)
+        self.btn_next.clicked.connect(self.next_room)
+
+        self.btn_visit = QPushButton("🐾 Yuyu & Kätzchen verbergen")
+        self.btn_visit.setStyleSheet("""
+            QPushButton {
+                background-color: #3b82f6;
+                color: white;
+                border: none;
+                border-radius: 6px;
+                padding: 6px 14px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #2563eb;
+            }
+        """)
+        self.btn_visit.clicked.connect(self._toggle_yuyu_visit)
+
+        bar.addWidget(self.btn_prev)
+        bar.addWidget(self.combo_rooms, 1)
+        bar.addWidget(self.btn_next)
+        bar.addWidget(self.btn_visit)
+        layout.addLayout(bar)
+
+        self.canvas = CozyRoomCanvas(self)
+        layout.addWidget(self.canvas, 1)
+
+        self.anim_timer = QTimer(self)
+        self.anim_timer.timeout.connect(self.canvas.update)
+        self.anim_timer.start(50)
+
+    def _load_rooms(self):
+        for r in ROOM_DEFINITIONS:
+            f_path = self.props_dir / r["file"]
+            if f_path.exists():
+                img = QImage(str(f_path))
+                if not img.isNull():
+                    self.room_images[r["id"]] = img
+
+    def _on_combo_changed(self, idx: int):
+        self.current_room_idx = idx
+        self.canvas.update()
+
+    def prev_room(self):
+        new_idx = (self.current_room_idx - 1) % len(ROOM_DEFINITIONS)
+        self.combo_rooms.setCurrentIndex(new_idx)
+
+    def next_room(self):
+        new_idx = (self.current_room_idx + 1) % len(ROOM_DEFINITIONS)
+        self.combo_rooms.setCurrentIndex(new_idx)
+
+    def _toggle_yuyu_visit(self):
+        self.canvas.show_yuyu = not self.canvas.show_yuyu
+        self.btn_visit.setText("🐾 Yuyu hineinsetzen" if not self.canvas.show_yuyu else "🐾 Yuyu & Kätzchen verbergen")
+        self.canvas.update()
+
+    def keyPressEvent(self, event):
+        if event.key() in (Qt.Key.Key_Left, Qt.Key.Key_A):
+            self.prev_room()
+            event.accept()
+        elif event.key() in (Qt.Key.Key_Right, Qt.Key.Key_D):
+            self.next_room()
+            event.accept()
+        elif event.key() == Qt.Key.Key_Escape:
+            self.close()
+            event.accept()
+        else:
+            super().keyPressEvent(event)
+
+
+# ==============================================================================
 # 10. HAUPTFENSTER: DESKTOP PET & TAMAGOTCHI OVERLAY
 # ==============================================================================
 class DesktopPetWindow(QWidget):
@@ -1749,10 +2015,24 @@ class DesktopPetWindow(QWidget):
         self.setAttribute(Qt.WidgetAttribute.WA_NoSystemBackground, True)
         self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating, True)
 
-        # Spritesheet & Multi-Sheet Action Library laden
+        # Spritesheet, Multi-Sheet Action & Props Library laden
         self.spritesheet = None
         self.action_sheets = {}
+        self.prop_sheets = {}
         self._load_spritesheet()
+
+        # Kätzchen-Begleiter State
+        self.kitty_enabled = self.config.get("show_kitty", True)
+        self.kitty_anim = "idle"
+        self.kitty_anim_start = time.time()
+        self.kitty_frame_idx = 0
+        self.next_kitty_decision = time.time() + 4.0
+        self._kitty_rect = QRect()
+        self._crate_rect = QRect()
+
+        # Props & Raum-Fenster State
+        self.props_enabled = self.config.get("show_props", True)
+        self.room_window = None
 
         # Skalierung & Rendering
         self.scale = float(self.config.get("scale", 0.70))
@@ -1916,8 +2196,41 @@ class DesktopPetWindow(QWidget):
         if self.action_sheets:
             print(f"[DesktopPet] {len(self.action_sheets)} High-Def Action-Sheets geladen: {list(self.action_sheets.keys())}")
 
+        # Props & Zubehör Library laden (z.B. pets/<skin>/props/*.webp)
+        self.prop_sheets = {}
+        candidate_prop_dirs = []
+        if base_path:
+            candidate_prop_dirs.append(base_path.parent / "props")
+        candidate_prop_dirs.append(script_dir / "pets" / active / "props")
+        candidate_prop_dirs.append(script_dir / "pets" / "yuyu-chibi" / "props")
+        candidate_prop_dirs.append(Path.home() / ".local" / "share" / "webjarvis_petaddon" / "pets" / active / "props")
+        candidate_prop_dirs.append(Path.home() / ".local" / "share" / "webjarvis_petaddon" / "pets" / "yuyu-chibi" / "props")
+
+        for d in candidate_prop_dirs:
+            if d.exists() and d.is_dir():
+                for prop_file in d.glob("*.webp"):
+                    p_stem = prop_file.stem
+                    if p_stem not in self.prop_sheets:
+                        p_img = QImage(str(prop_file))
+                        if not p_img.isNull():
+                            self.prop_sheets[p_stem] = p_img
+                if self.prop_sheets:
+                    break
+
+        # Standard Aliase für Kitty und Props setzen
+        if "Katze_zubehör" in self.prop_sheets:
+            self.prop_sheets["kitty"] = self.prop_sheets["Katze_zubehör"]
+        if "bett_lape_wasser_v2" in self.prop_sheets:
+            self.prop_sheets["props"] = self.prop_sheets["bett_lape_wasser_v2"]
+        elif "bett_lape_wasser" in self.prop_sheets:
+            self.prop_sheets["props"] = self.prop_sheets["bett_lape_wasser"]
+
+        if self.prop_sheets:
+            print(f"[DesktopPet] {len(self.prop_sheets)} Prop-Sheets geladen: {list(self.prop_sheets.keys())}")
+
     def _update_window_size(self):
-        w = int(FRAME_WIDTH * self.scale) + 40
+        extra_w = int(120 * self.scale) if (self.config.get("show_props", True) or self.config.get("show_kitty", True)) else 40
+        w = int(FRAME_WIDTH * self.scale) + extra_w + 30
         h = int(FRAME_HEIGHT * self.scale) + self.hud_height + 40
         self.setFixedSize(w, h)
 
@@ -2193,6 +2506,31 @@ class DesktopPetWindow(QWidget):
                 self.next_frame_idx = min(frames_avail - 1, self.frame_idx + 1)
                 self.subframe_progress = frame_float - int(frame_float)
 
+        # 4b. Kätzchen-Begleiter Animation updaten
+        if getattr(self, "kitty_enabled", True) and "kitty" in getattr(self, "prop_sheets", {}):
+            if self.tamagotchi.is_sleeping:
+                self.kitty_anim = "sleep"
+            elif self.current_anim.startswith("running-left"):
+                self.kitty_anim = "walk_left"
+            elif self.current_anim.startswith("running"):
+                self.kitty_anim = "walk_right"
+            elif now > getattr(self, "next_kitty_decision", 0):
+                self.next_kitty_decision = now + random.uniform(5.0, 10.0)
+                r_choice = random.random()
+                if r_choice < 0.40:
+                    self.kitty_anim = "idle"
+                elif r_choice < 0.70:
+                    self.kitty_anim = "groom"
+                else:
+                    self.kitty_anim = "play_yarn"
+                self.kitty_anim_start = now
+
+            k_cfg = KITTY_ANIMATIONS.get(self.kitty_anim, KITTY_ANIMATIONS["idle"])
+            k_elapsed = (now - getattr(self, "kitty_anim_start", now)) * 1000.0
+            k_dur = float(k_cfg["duration_ms"])
+            k_prog = (k_elapsed % k_dur) / k_dur
+            self.kitty_frame_idx = int(k_prog * k_cfg["frames"]) % k_cfg["frames"]
+
         # 5. Autonomes Roaming (nur wenn wach und kein Ball im Spiel)
         if self.config.get("roaming_enabled", True) and not self.is_dragging and not self.ball_game.active and not self.tamagotchi.is_sleeping:
             if now > self.next_roam_decision:
@@ -2394,10 +2732,67 @@ class DesktopPetWindow(QWidget):
                 painter.rotate(self.current_tilt)
                 painter.translate(-anchor_x, -anchor_y)
 
+            # Kuschelbett rendern (wenn schlafend)
+            if self.tamagotchi.is_sleeping and getattr(self, "props_enabled", True) and "props" in getattr(self, "prop_sheets", {}):
+                bed_img = self.prop_sheets["props"]
+                b_cell_w = bed_img.width() // 8
+                b_cell_h = int(bed_img.height() / 11.0)
+                bed_src = QRectF(4 * b_cell_w, 1 * b_cell_h, 2 * b_cell_w, b_cell_h)
+                bed_w = int(130 * self.scale)
+                bed_h = int(72 * self.scale)
+                bed_dst = QRectF(dst_x - 12, dst_y + dst_h - bed_h + 4, bed_w, bed_h)
+                painter.drawImage(bed_dst, bed_img, bed_src)
+
+            # Wasserkasten (Hydration Status) & Lampe/Pflanze rendern
+            if getattr(self, "props_enabled", True) and "props" in getattr(self, "prop_sheets", {}):
+                prop_img = self.prop_sheets["props"]
+                p_cw = prop_img.width() // 8
+                p_ch = int(prop_img.height() / 11.0)
+                crate_col = 0 if self.tamagotchi.thirst >= 65 else (1 if self.tamagotchi.thirst >= 25 else 3)
+                crate_src = QRectF(crate_col * p_cw, 5 * p_ch, p_cw, p_ch)
+                cw = int(40 * self.scale)
+                ch = int(44 * self.scale)
+                cx = dst_x - cw - 4
+                cy = dst_y + dst_h - ch
+                self._crate_rect = QRect(int(cx), int(cy), cw, ch)
+                painter.drawImage(QRectF(cx, cy, cw, ch), prop_img, crate_src)
+
+                if self.pomodoro.mode == "FOCUS":
+                    lamp_src = QRectF(2 * p_cw, 4 * p_ch, p_cw, p_ch)
+                    lw = int(48 * self.scale)
+                    lh = int(54 * self.scale)
+                    painter.drawImage(QRectF(dst_x + dst_w + 4, dst_y + dst_h - lh, lw, lh), prop_img, lamp_src)
+                else:
+                    plt_col = 1 if self.tamagotchi.energy >= 35 else 2
+                    plt_src = QRectF(plt_col * p_cw, 8 * p_ch, p_cw, p_ch)
+                    pw = int(36 * self.scale)
+                    ph = int(42 * self.scale)
+                    painter.drawImage(QRectF(dst_x + dst_w + 4, dst_y + dst_h - ph, pw, ph), prop_img, plt_src)
+
             # Sauberes, scharfes und flackerfreies Sprite-Rendering (Codex V2 Standard)
             target_rect = QRectF(dst_x, dst_y, dst_w, dst_h)
             source_rect = QRectF(src_x, src_y, src_w, src_h)
             painter.drawImage(target_rect, cur_img, source_rect)
+
+            # Kätzchen-Begleiter rendern
+            if getattr(self, "kitty_enabled", True) and "kitty" in getattr(self, "prop_sheets", {}):
+                k_img = self.prop_sheets["kitty"]
+                k_cw = k_img.width() // 8
+                k_ch = int(k_img.height() / 11.0)
+                k_cfg = KITTY_ANIMATIONS.get(self.kitty_anim, KITTY_ANIMATIONS["idle"])
+                k_col = k_cfg["start_col"] + (self.kitty_frame_idx % k_cfg["frames"])
+                k_row = k_cfg["row"]
+                k_src = QRectF(k_col * k_cw, k_row * k_ch, k_cw, k_ch)
+                kw = int(FRAME_WIDTH * self.scale * 0.44)
+                kh = int(FRAME_HEIGHT * self.scale * 0.44)
+                kx = dst_x + dst_w - 6
+                ky = dst_y + dst_h - kh
+                self._kitty_rect = QRect(int(kx), int(ky), kw, kh)
+                # Weicher Kätzchen-Bodenschatten
+                painter.setPen(Qt.PenStyle.NoPen)
+                painter.setBrush(QColor(0, 0, 0, 60))
+                painter.drawEllipse(QRectF(kx + 6, ky + kh - 6, kw - 12, 6))
+                painter.drawImage(QRectF(kx, ky, kw, kh), k_img, k_src)
 
             # 4b. Micro-Animationen: Errötende Bäckchen (Blush) beim Streicheln
             if now < self._blush_until:
@@ -2412,7 +2807,7 @@ class DesktopPetWindow(QWidget):
                 painter.drawEllipse(QRectF(dst_x + dst_w * 0.56, cheek_y, cheek_w, cheek_h))
 
             # 4c. Micro-Animation: Sanftes Blinzeln (Blink Eyelids)
-            if now < self._blink_until and self.current_anim in ["idle", "waiting"] and not self.tamagotchi.is_sleeping:
+            if now < self._blink_until and self.current_anim in ["idle", "waiting"] and not is_act and not self.tamagotchi.is_sleeping:
                 eye_col = QColor(40, 25, 45, 230)
                 painter.setPen(QPen(eye_col, 2.2, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
                 painter.setBrush(Qt.BrushStyle.NoBrush)
@@ -2422,7 +2817,7 @@ class DesktopPetWindow(QWidget):
                 painter.drawArc(int(dst_x + dst_w * 0.56), eye_y, ew, 10, 30 * 16, 120 * 16)
 
             # 4d. Snack-Munching Overlay
-            if self._snack_anim and now < self._snack_anim.get("end_time", 0):
+            if self._snack_anim and now < self._snack_anim.get("end_time", 0) and not is_act:
                 snack_prog = (self._snack_anim["end_time"] - now) / 2.0
                 bob = math.sin(now * 10) * 4
                 s_icon = self._snack_anim.get("icon", "🥪")
@@ -2618,6 +3013,32 @@ class DesktopPetWindow(QWidget):
                     self.speech_bubble_timeout = time.time() + 4.0
                     self.voice.speak(drag_line)
             else:
+                pos = event.position().toPoint()
+                # 1. Kätzchen streicheln / kraulen
+                if getattr(self, "kitty_enabled", True) and hasattr(self, "_kitty_rect") and self._kitty_rect.isValid() and self._kitty_rect.contains(pos):
+                    self.kitty_anim = "groom"
+                    self.next_kitty_decision = time.time() + 5.0
+                    self.sfx.play("purr")
+                    self.add_particle("💖", QColor(244, 63, 94))
+                    self.add_particle("🐾", QColor(251, 191, 36), offset_x=12, offset_y=-10)
+                    self.config.add_xp(8)
+                    line = random.choice([
+                        "Miau! Das Kätzchen schnurrt selig! 🐱💕",
+                        "Schnurr, schnurr... Es liebt deine Streicheleinheiten! ✨🐾",
+                        "Kätzchen reibt sein Köpfchen an deiner Hand! 😻"
+                    ])
+                    self.speech_bubble_text = line
+                    self.speech_bubble_timeout = time.time() + 3.5
+                    self.voice.speak(line)
+                    event.accept()
+                    return
+
+                # 2. Wasserkasten anklicken (Schnell trinken)
+                if getattr(self, "props_enabled", True) and hasattr(self, "_crate_rect") and self._crate_rect.isValid() and self._crate_rect.contains(pos):
+                    self._feed_snack_action("water")
+                    event.accept()
+                    return
+
                 if self.tamagotchi.is_sleeping:
                     self._toggle_sleep_action()
                 else:
@@ -2834,6 +3255,13 @@ class DesktopPetWindow(QWidget):
         menu.addAction("🧘 Bildschirmpause machen & Dehnen (+100%)").triggered.connect(self._take_break_action)
         menu.addAction("👁️ Ergonomie- & Haltungs-Check").triggered.connect(self.ergonomics_check)
 
+        # Cozy Room Simulator & Begleiter-Toggles
+        menu.addAction("🏠 Yuyus Zimmer (Room Simulator)...").triggered.connect(self._open_cozy_room)
+        kitty_text = "🐱 Kätzchen verbergen" if getattr(self, "kitty_enabled", True) else "🐱 Kätzchen rufen"
+        menu.addAction(kitty_text).triggered.connect(self._toggle_kitty)
+        props_text = "🧰 Deko-Props verbergen" if getattr(self, "props_enabled", True) else "🧰 Deko-Props einblenden"
+        menu.addAction(props_text).triggered.connect(self._toggle_props)
+
         menu.addSeparator()
 
         # 2. Minispiele Submenü
@@ -3048,6 +3476,49 @@ class DesktopPetWindow(QWidget):
             self.scale = float(self.config.get("scale", 0.70))
             self._update_window_size()
             self.update()
+
+    def _find_props_dir(self) -> Path:
+        skin = self.config.get("active_skin", "yuyu-chibi")
+        base_paths = [
+            Path(__file__).resolve().parent / "pets" / skin / "props",
+            Path.home() / ".local/share/webjarvis_petaddon/pets" / skin / "props",
+            Path("/home/graba/Schreibtisch/ASGRAD/Valhalla/TOOLS/GRABAS_GITHUB/webjarvis_petaddon/pets") / skin / "props"
+        ]
+        for p in base_paths:
+            if p.exists() and p.is_dir():
+                return p
+        return base_paths[0]
+
+    def _open_cozy_room(self):
+        props_dir = self._find_props_dir()
+        if not self.room_window:
+            self.room_window = CozyRoomWindow(props_dir, self)
+        self.room_window.show()
+        self.room_window.raise_()
+        self.room_window.activateWindow()
+        line = "Willkommen in meinem Zimmer! Mach es dir gemütlich! 🌸✨"
+        self.speech_bubble_text = line
+        self.speech_bubble_timeout = time.time() + 4.0
+        self.voice.speak(line)
+        self.sfx.play("fortune")
+
+    def _toggle_kitty(self):
+        self.kitty_enabled = not getattr(self, "kitty_enabled", True)
+        self.config.set("show_kitty", self.kitty_enabled)
+        self._update_window_size()
+        status = "Kätzchen ist da! 🐱" if self.kitty_enabled else "Kätzchen macht ein Schläfchen 💤"
+        self.speech_bubble_text = status
+        self.speech_bubble_timeout = time.time() + 2.5
+        self.update()
+
+    def _toggle_props(self):
+        self.props_enabled = not getattr(self, "props_enabled", True)
+        self.config.set("show_props", self.props_enabled)
+        self._update_window_size()
+        status = "Deko-Props aktiviert! 🧰" if self.props_enabled else "Deko-Props verborgen 📦"
+        self.speech_bubble_text = status
+        self.speech_bubble_timeout = time.time() + 2.5
+        self.update()
 
     def _exit_app(self):
         self.config.set("pos_x", self.x())
