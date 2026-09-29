@@ -1,0 +1,7 @@
+{
+  "id": "openpets-classic",
+  "displayName": "OpenPets Classic",
+  "description": "Der originale offizielle OpenPets Desktop-Begleiter mit flüssigen Animationen.",
+  "spriteVersionNumber": 2,
+  "spritesheetPath": "spritesheet.webp"
+}

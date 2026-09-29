@@ -2580,6 +2580,7 @@ def main():
     parser.add_argument("--dice", action="store_true", help="Würfelt eine Zahl von 1 bis 6")
     parser.add_argument("--fortune", action="store_true", help="Zieht einen inspirierenden Entwickler-Glückskeks")
     parser.add_argument("--skins", action="store_true", help="Listet alle gefundenen Pet-Skins auf")
+    parser.add_argument("--set-skin", type=str, help="Wechselt den aktiven Pet-Skin (z.B. yuyu-chibi oder openpets-classic)")
     parser.add_argument("--say", type=str, help="Lässt das Pet eine Sprachnachricht vorlesen")
     args, unknown = parser.parse_known_args()
 
@@ -2587,6 +2588,11 @@ def main():
 
     if args.status:
         print_cli_status(config)
+        return
+
+    if args.set_skin:
+        config.set("active_skin", args.set_skin)
+        print(f"✓ Aktiver Skin gewechselt zu: \033[1;32m{args.set_skin}\033[0m")
         return
 
     if args.skins:
